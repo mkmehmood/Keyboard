@@ -71,7 +71,9 @@ class SuggestTest {
         assertEquals("the", Suggest.correct("teh", 1))
         Suggest.keep("teh")
         assertEquals(null, Suggest.correct("teh", 1))
-        assertEquals(null, Suggest.correct("dont", 1).takeIf { Suggest.keep("dont"); true }.let { Suggest.correct("dont", 1) })
+        assertEquals("don't", Suggest.correct("dont", 1))
+        Suggest.keep("dont")
+        assertEquals(null, Suggest.correct("dont", 1))
     }
 
     @Test fun suggestionsFollowTheCaseBeingTyped() {
