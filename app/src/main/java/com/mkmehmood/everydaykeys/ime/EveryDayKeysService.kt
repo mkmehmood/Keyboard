@@ -71,7 +71,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     /** Most recently copied item that has not been pasted yet; shown in the suggestion bar. */
     var pendingClip by mutableStateOf<Clip?>(null)
     val showClipChip: Boolean get() = pendingClip != null && !sensitive && clipUnlocked
-    class Trans(val result: String? = null, val message: String? = null, val replaceLen: Int = 0)
+    class Trans(val result: String? = null, val message: String? = null, val target: String = "", val raw: String = "", val selected: Boolean = false)
     var trans by mutableStateOf<Trans?>(null)
     private var transJob: kotlinx.coroutines.Job? = null
     private var onlineJob: kotlinx.coroutines.Job? = null
@@ -448,36 +448,69 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     fun openSettings() = launch(Intent(this, SettingsActivity::class.java))
     fun startVoice() = launch(Intent(this, VoiceActivity::class.java))
     /** Translate the selection, or else the text typed since the last line break, and offer the result in the bar. */
-    fun translate() {
+    fun translate(forceTarget: String? = null) {
         val ic = currentInputConnection ?: return
         if (sensitive) { trans = Trans(message = "Translation is disabled in password fields"); return }
         val sel = ic.getSelectedText(0)?.toString().orEmpty()
-        val before = if (sel.isEmpty()) ic.getTextBeforeCursor(1000, 0)?.toString().orEmpty().takeLastWhile { it != '\n' } else ""
-        val src = (sel.ifEmpty { before }).trim()
+        var before = ""
+        if (sel.isEmpty()) {
+            before = ic.getTextBeforeCursor(1000, 0)?.toString().orEmpty().takeLastWhile { it != '\n' }
+            // a long run of text was cut mid-word at the 1000 character limit: start at the next whole word
+            if (before.length >= 1000) before = before.substring(before.indexOfFirst { it.isWhitespace() }.let { if (it < 0) 0 else it })
+        }
+        val raw = sel.ifEmpty { before }
+        val src = raw.trim()
         if (src.isEmpty()) { trans = Trans(message = "Select or type some text first"); return }
-        val replaceLen = if (sel.isNotEmpty()) 0 else before.length
-        trans = Trans(message = "Translating…")
+        val lead = raw.takeWhile { it.isWhitespace() }
+        val trail = if (src.isEmpty()) "" else raw.takeLastWhile { it.isWhitespace() }
+
+        val p = prefs
+        val detected = Translator.detectSource(src)
+        val configured = p.str("translateTarget")
+        var target = forceTarget ?: configured
+        if (forceTarget == null && detected == target) {
+            // text is already in the chosen language: translate into the first other keyboard language instead
+            target = (p.str("languages").split(",") + Translator.languages.map { it.first }).firstOrNull { it != detected && it.isNotBlank() } ?: "en"
+        }
+        if (detected == target) { trans = Trans(message = "Already in ${Translator.nameOf(target)}", target = target, raw = raw, selected = sel.isNotEmpty()); return }
+
+        trans = Trans(message = "Translating…", target = target, raw = raw, selected = sel.isNotEmpty())
         transJob?.cancel()
         transJob = scope.launch {
-            trans = try {
-                val p = prefs
-                val r = Translator.translate(src, p.str("translateTarget"), p.str("translateProvider"), p.str("googleApiKey"), p.str("deeplApiKey"), p.str("translateEmail"))
-                Trans(result = r, replaceLen = replaceLen)
-            } catch (e: Translator.Failure) { Trans(message = e.message) }
-            catch (e: Exception) { Trans(message = "Translation failed") }
+            val next = try {
+                val r = Translator.translate(src, target, detected, p.str("translateProvider"), p.str("googleApiKey"), p.str("deeplApiKey"), p.str("translateEmail"))
+                Trans(result = lead + r.trim() + trail, target = target, raw = raw, selected = sel.isNotEmpty())
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Translator.Failure) { Trans(message = e.message, target = target, raw = raw, selected = sel.isNotEmpty()) }
+            catch (e: Exception) { Trans(message = "Translation failed (${e.javaClass.simpleName})", target = target, raw = raw, selected = sel.isNotEmpty()) }
+            trans = next
         }
     }
 
+    /** Tapping the language chip: translate the same text into the next language and remember the choice. */
+    fun nextTranslateTarget() {
+        val cur = trans?.target ?: prefs.str("translateTarget")
+        val known = Translator.languages.map { it.first }
+        val mine = prefs.str("languages").split(",").filter { it in known }
+        val cycle = if (mine.size >= 2) mine else known
+        val next = cycle[(cycle.indexOf(cur) + 1) % cycle.size]
+        scope.launch { SettingsRepo.set(this@EveryDayKeysService, "translateTarget", next) }
+        translate(next)
+    }
+
     fun applyTranslation() {
-        val t = trans?.result ?: return
+        val t = trans ?: return
+        val res = t.result ?: return
         val ic = currentInputConnection ?: return
+        val unchanged = if (t.selected) ic.getSelectedText(0)?.toString() == t.raw
+            else ic.getTextBeforeCursor(t.raw.length, 0)?.toString() == t.raw
+        if (!unchanged) { trans = Trans(message = "The text changed. Tap Translate again.", target = t.target); return }
         ic.beginBatchEdit()
-        if (t0(trans) > 0) ic.deleteSurroundingText(t0(trans), 0)
-        ic.commitText(t, 1)
+        if (!t.selected) ic.deleteSurroundingText(t.raw.length, 0)
+        ic.commitText(res, 1)
         ic.endBatchEdit()
         trans = null
         afterTyped()
     }
-    private fun t0(t: Trans?) = t?.replaceLen ?: 0
     fun dismissTranslation() { transJob?.cancel(); trans = null }
 }

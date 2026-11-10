@@ -54,6 +54,7 @@ import com.mkmehmood.everydaykeys.data.AppDb
 import com.mkmehmood.everydaykeys.data.Calc
 import com.mkmehmood.everydaykeys.data.Clip
 import com.mkmehmood.everydaykeys.data.UnitDef
+import com.mkmehmood.everydaykeys.data.Translator
 import com.mkmehmood.everydaykeys.data.Units
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -359,12 +360,17 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayKeysService.Trans) {
-    Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 38.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(R.drawable.ic_translate), null, tint = c.accent, modifier = Modifier.padding(horizontal = 10.dp).size(20.dp))
         val ok = tr.result != null
         Text(
-            tr.result ?: tr.message.orEmpty(), color = if (ok) c.text else c.sub, fontSize = if (ok) 18.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            tr.result ?: tr.message.orEmpty(), color = if (ok) c.text else c.sub, fontSize = if (ok) 17.sp else 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).then(if (ok) Modifier.clickable { svc.feedback(); svc.applyTranslation() } else Modifier).padding(vertical = 8.dp)
+        )
+        if (tr.target.isNotBlank()) Text(
+            "→ " + Translator.nameOf(tr.target), color = c.accent, fontSize = 13.sp, maxLines = 1,
+            modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(12.dp)).background(c.panel)
+                .clickable { svc.feedback(); svc.nextTranslateTarget() }.padding(horizontal = 10.dp, vertical = 6.dp)
         )
         IconTap(R.drawable.ic_close, "Dismiss translation", c) { svc.dismissTranslation() }
     }
