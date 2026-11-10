@@ -226,6 +226,14 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
                 ) { Checkbox(v in cur, null, Modifier.padding(12.dp)); Text(l) }
             }
         }
+        is Input -> {
+            var v by remember(prefs.str(item.key)) { mutableStateOf(prefs.str(item.key)) }
+            OutlinedTextField(
+                v, { v = it; set(item.key, it.trim()) }, Modifier.fillMaxWidth().padding(vertical = 6.dp), singleLine = true,
+                label = { Text(item.title) },
+                visualTransformation = if (item.secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None
+            )
+        }
         is Slide -> {
             var v by remember(prefs.int(item.key)) { mutableStateOf(prefs.int(item.key).toFloat()) }
             Column(Modifier.padding(vertical = 6.dp)) {
@@ -242,7 +250,7 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
                     Text(item.title)
                     if (desc.isNotBlank()) Text(desc, fontSize = 13.sp, color = sub)
                 }
-                if (item.id != "version" && item.id != "privacyNote" && item.id != "localNote") Ic(R.drawable.ic_chevron)
+                if (item.id != "version" && item.id != "privacyNote" && item.id != "localNote" && item.id != "translateNote") Ic(R.drawable.ic_chevron)
             }
         }
     }
@@ -299,7 +307,7 @@ fun SectionScreen(id: String, nav: NavController) {
                 ItemRow(shown, prefs, { k, v -> commitSetting(ctx, scope, k, v) }, ctx, ::onAction)
                 HorizontalDivider()
             }
-            val keys = s.items.filter { it !is Action }.map { it.key }
+            val keys = s.items.filter { it !is Action && it !is Input }.map { it.key }
             if (keys.isNotEmpty()) OutlinedButton(
                 onClick = { scope.launch { SettingsRepo.reset(ctx, keys) } },
                 modifier = Modifier.padding(vertical = 16.dp)

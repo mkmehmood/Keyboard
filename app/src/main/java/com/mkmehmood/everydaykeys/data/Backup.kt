@@ -17,7 +17,7 @@ object Backup {
         val repo = ClipRepo(ctx)
         val root = JSONObject().put("version", 1)
         val s = JSONObject()
-        ctx.store.data.first().asMap().forEach { (k, v) -> s.put(k.name, v.toString()) }
+        ctx.store.data.first().asMap().forEach { (k, v) -> if (!k.name.endsWith("ApiKey")) s.put(k.name, v.toString()) }
         root.put("settings", s)
         val sn = JSONArray()
         db.snippets().all().forEach { sn.put(JSONObject().put("title", it.title).put("body", it.body).put("shortcut", it.shortcut)) }

@@ -36,6 +36,7 @@ class Toggle(key: String, title: String, d: Boolean) : Item(key, title, d.toStri
 class Choice(key: String, title: String, val options: List<Pair<String, String>>, d: String) : Item(key, title, d)
 class Multi(key: String, title: String, val options: List<Pair<String, String>>, d: String) : Item(key, title, d)
 class Slide(key: String, title: String, val min: Int, val max: Int, d: Int) : Item(key, title, d.toString())
+class Input(key: String, title: String, val secret: Boolean = false, val hint: String = "") : Item(key, title, "")
 class Action(val id: String, title: String, val desc: String = "", val url: String? = null) : Item("action_$id", title, "")
 class Section(val id: String, val title: String, val desc: String, val icon: Int, val items: List<Item>)
 
@@ -76,6 +77,14 @@ object Defs {
             Toggle("doubleSpace", "Double-space for a period", true),
             Action("dictionary", "Personal dictionary", "Add or remove your own words"),
             Action("localNote", "Local by default", "Online suggestions are optional and send only the partial word you are typing")
+        )),
+        Section("translate", "Translation", "Translate selected or typed text", R.drawable.ic_translate, listOf(
+            Choice("translateProvider", "Provider", listOf("mymemory" to "MyMemory (free, no key)", "google" to "Google Cloud (your key)", "deepl" to "DeepL Free (your key)"), "mymemory"),
+            Choice("translateTarget", "Translate into", listOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi", "es" to "Spanish", "fr" to "French", "de" to "German", "pt" to "Portuguese", "ru" to "Russian", "tr" to "Turkish", "it" to "Italian", "zh" to "Chinese", "ja" to "Japanese", "ko" to "Korean", "id" to "Indonesian", "fa" to "Persian", "bn" to "Bengali"), "en"),
+            Input("googleApiKey", "Google Cloud Translation API key", secret = true),
+            Input("deeplApiKey", "DeepL API Free key", secret = true),
+            Input("translateEmail", "Email for a higher free MyMemory limit (optional)"),
+            Action("translateNote", "Sent only when you tap Translate", "The text you translate goes to the provider you chose. Nothing is sent automatically.")
         )),
         Section("appearance", "Appearance", "Theme, key height, font size", R.drawable.ic_sun, listOf(
             Choice("theme", "Theme", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"), "system"),

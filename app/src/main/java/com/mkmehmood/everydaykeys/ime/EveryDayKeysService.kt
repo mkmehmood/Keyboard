@@ -70,6 +70,9 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     /** Most recently copied item that has not been pasted yet; shown in the suggestion bar. */
     var pendingClip by mutableStateOf<Clip?>(null)
     val showClipChip: Boolean get() = pendingClip != null && !sensitive
+    class Trans(val result: String? = null, val message: String? = null, val replaceLen: Int = 0)
+    var trans by mutableStateOf<Trans?>(null)
+    private var transJob: kotlinx.coroutines.Job? = null
     private var onlineJob: kotlinx.coroutines.Job? = null
     var alts by mutableStateOf<List<String>?>(null)
     var progress by mutableStateOf<Float?>(null)
@@ -165,6 +168,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         closePanel()
         progress = null
         alts = null
+        trans = null
         val numeric = cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE || cls == InputType.TYPE_CLASS_DATETIME
         mode = if (numeric && prefs.bool("autoNumPad")) Mode.NUMPAD else Mode.LETTERS
         shift = Shift.OFF
@@ -363,8 +367,37 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private fun launch(i: Intent) = startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     fun openSettings() = launch(Intent(this, SettingsActivity::class.java))
     fun startVoice() = launch(Intent(this, VoiceActivity::class.java))
+    /** Translate the selection, or else the text typed since the last line break, and offer the result in the bar. */
     fun translate() {
-        val sel = currentInputConnection?.getSelectedText(0)?.toString().orEmpty().take(2000)
-        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://translate.google.com/?sl=auto&op=translate&text=" + Uri.encode(sel))))
+        val ic = currentInputConnection ?: return
+        if (sensitive) { trans = Trans(message = "Translation is disabled in password fields"); return }
+        val sel = ic.getSelectedText(0)?.toString().orEmpty()
+        val before = if (sel.isEmpty()) ic.getTextBeforeCursor(1000, 0)?.toString().orEmpty().takeLastWhile { it != '\n' } else ""
+        val src = (sel.ifEmpty { before }).trim()
+        if (src.isEmpty()) { trans = Trans(message = "Select or type some text first"); return }
+        val replaceLen = if (sel.isNotEmpty()) 0 else before.length
+        trans = Trans(message = "Translating…")
+        transJob?.cancel()
+        transJob = scope.launch {
+            trans = try {
+                val p = prefs
+                val r = Translator.translate(src, p.str("translateTarget"), p.str("translateProvider"), p.str("googleApiKey"), p.str("deeplApiKey"), p.str("translateEmail"))
+                Trans(result = r, replaceLen = replaceLen)
+            } catch (e: Translator.Failure) { Trans(message = e.message) }
+            catch (e: Exception) { Trans(message = "Translation failed") }
+        }
     }
+
+    fun applyTranslation() {
+        val t = trans?.result ?: return
+        val ic = currentInputConnection ?: return
+        ic.beginBatchEdit()
+        if (t0(trans) > 0) ic.deleteSurroundingText(t0(trans), 0)
+        ic.commitText(t, 1)
+        ic.endBatchEdit()
+        trans = null
+        afterTyped()
+    }
+    private fun t0(t: Trans?) = t?.replaceLen ?: 0
+    fun dismissTranslation() { transJob?.cancel(); trans = null }
 }

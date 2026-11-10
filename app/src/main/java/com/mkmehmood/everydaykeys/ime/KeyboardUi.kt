@@ -288,7 +288,7 @@ private fun tool(id: String): Tool? = when (id) {
     "clip" -> Tool(R.drawable.ic_clipboard, "Clipboard") { it.openPanel(Panel.CLIP) }
     "snip" -> Tool(R.drawable.ic_snippet, "Text snippets") { it.openPanel(Panel.SNIPPETS) }
     "voice" -> Tool(R.drawable.ic_mic, "Voice typing") { it.startVoice() }
-    "translate" -> Tool(R.drawable.ic_translate, "Translate selected text") { it.translate() }
+    "translate" -> Tool(R.drawable.ic_translate, "Translate selected or typed text") { it.translate() }
     "undo" -> Tool(R.drawable.ic_undo, "Undo") { it.undo() }
     "redo" -> Tool(R.drawable.ic_redo, "Redo") { it.redo() }
     "cursor" -> Tool(R.drawable.ic_code, "Cursor and edit keys") { it.openPanel(Panel.CURSOR) }
@@ -306,6 +306,8 @@ private fun Toolbar(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun Strip(svc: EveryDayKeysService, c: KbColors) {
+    val tr = svc.trans
+    if (tr != null) { TranslationBar(svc, c, tr); return }
     val alts = svc.alts
     val items = alts ?: svc.suggestions
     val pending = if (alts == null && svc.showClipChip) svc.pendingClip else null
@@ -319,6 +321,19 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
             )
         }
         if (alts != null) IconTap(R.drawable.ic_close, "Close alternates", c) { svc.alts = null }
+    }
+}
+
+@Composable
+private fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayKeysService.Trans) {
+    Row(Modifier.fillMaxWidth().height(38.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(R.drawable.ic_translate), null, tint = c.accent, modifier = Modifier.padding(horizontal = 10.dp).size(20.dp))
+        val ok = tr.result != null
+        Text(
+            tr.result ?: tr.message.orEmpty(), color = if (ok) c.text else c.sub, fontSize = if (ok) 18.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).then(if (ok) Modifier.clickable { svc.feedback(); svc.applyTranslation() } else Modifier).padding(vertical = 8.dp)
+        )
+        IconTap(R.drawable.ic_close, "Dismiss translation", c) { svc.dismissTranslation() }
     }
 }
 
