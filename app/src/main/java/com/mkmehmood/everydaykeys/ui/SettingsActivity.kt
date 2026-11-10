@@ -44,6 +44,8 @@ import androidx.navigation.compose.rememberNavController
 import com.mkmehmood.everydaykeys.R
 import com.mkmehmood.everydaykeys.data.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class SettingsActivity : ComponentActivity() {
@@ -51,6 +53,18 @@ class SettingsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { AppTheme { AppNav() } }
+        // make the real icon match the saved setting (it can drift after a restore or an interrupted change)
+        val app = applicationContext
+        MainScope().launch { Launcher.sync(app, SettingsRepo.flow(app).first().bool("hideLauncher")) }
+    }
+
+    override fun onStart() { super.onStart(); Launcher.uiVisible++ }
+
+    override fun onStop() {
+        super.onStop()
+        Launcher.uiVisible = maxOf(0, Launcher.uiVisible - 1)
+        // a rotation restarts this screen, so wait for the real close
+        if (Launcher.uiVisible == 0 && !isChangingConfigurations) Launcher.flush(applicationContext)
     }
 }
 
@@ -92,8 +106,7 @@ private fun rememberPrefs(): Prefs {
 }
 
 private fun imeStatus(ctx: Context): Pair<Boolean, Boolean> {
-    val imm = ctx.getSystemService(InputMethodManager::class.java)
-    val enabled = imm.enabledInputMethodList.any { it.packageName == ctx.packageName }
+    val enabled = Launcher.imeEnabled(ctx)
     val sel = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)?.startsWith(ctx.packageName + "/") == true
     return enabled to sel
 }
@@ -105,7 +118,7 @@ private fun commitSetting(ctx: Context, scope: CoroutineScope, k: String, v: Str
             Toast.makeText(ctx, "Enable Everyday Keys in Android settings first, so you can still reach these settings.", Toast.LENGTH_LONG).show()
             return
         }
-        Toast.makeText(ctx, "Icon hidden. Open settings from the keyboard's gear icon or Android's keyboard settings.", Toast.LENGTH_LONG).show()
+        Toast.makeText(ctx, "The icon will be hidden when you leave this screen. Open settings again from the keyboard's gear icon or Android's keyboard settings.", Toast.LENGTH_LONG).show()
     }
     scope.launch { SettingsRepo.set(ctx, k, v) }
 }
@@ -361,7 +374,7 @@ fun SectionScreen(id: String, nav: NavController) {
             "wipeAll" -> confirm = Confirm("Delete clipboard, snippets, dictionary and settings? This cannot be undone.") {
                 scope.launch {
                     KbBackground.delete(ctx); ClipRepo(ctx).clearAll(); AppDb.get(ctx).snippets().clear(); AppDb.get(ctx).words().clear(); Bigrams.clear(ctx)
-                    ctx.store.edit { it.clear() }; Launcher.apply(ctx, false); toast("All data deleted")
+                    ctx.store.edit { it.clear() }; Launcher.request(ctx, false); toast("All data deleted")
                 }
             }
             "export" -> exportL.launch("everyday-keys-backup.json")

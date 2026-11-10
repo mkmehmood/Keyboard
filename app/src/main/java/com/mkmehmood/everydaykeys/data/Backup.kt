@@ -84,7 +84,7 @@ object Backup {
                     "settings" -> {
                         val s = readStrings(r).filterKeys { !Secrets.isSecretKey(it) }
                         ctx.store.edit { e -> s.forEach { (k, v) -> e[stringPreferencesKey(k)] = v } }
-                        s["hideLauncher"]?.let { Launcher.apply(ctx, it == "true") }
+                        s["hideLauncher"]?.let { Launcher.request(ctx, it == "true") }
                     }
                     "snippets" -> {
                         r.beginArray()

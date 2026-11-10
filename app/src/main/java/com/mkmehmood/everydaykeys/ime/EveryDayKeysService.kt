@@ -203,6 +203,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 v != InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS && v != InputType.TYPE_TEXT_VARIATION_URI &&
                 (editorInfo.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) == 0
         resetTypingState()
+        Launcher.sync(this, prefs.bool("hideLauncher"))
         closePanel()
         if (reopenClip) { reopenClip = false; openPanel(Panel.CLIP) }
         progress = null

@@ -27,11 +27,11 @@ object SettingsRepo {
     suspend fun set(ctx: Context, key: String, value: String) {
         val stored = if (Secrets.isSecretKey(key)) Secrets.encrypt(value) else value
         ctx.store.edit { it[stringPreferencesKey(key)] = stored }
-        if (key == "hideLauncher") Launcher.apply(ctx, value == "true")
+        if (key == "hideLauncher") Launcher.request(ctx, value == "true")
     }
     suspend fun reset(ctx: Context, keys: List<String>) {
         ctx.store.edit { e -> keys.forEach { e.remove(stringPreferencesKey(it)) } }
-        if ("hideLauncher" in keys) Launcher.apply(ctx, false)
+        if ("hideLauncher" in keys) Launcher.request(ctx, false)
     }
 }
 
