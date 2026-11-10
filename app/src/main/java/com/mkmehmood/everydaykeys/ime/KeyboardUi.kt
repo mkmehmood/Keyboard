@@ -294,7 +294,6 @@ private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
         // four columns share the whole width; keys are square until that would get too tall
         val side = (maxWidth - KeyGap * 3) / 4
         val kh = minOf(side, MaxKey)
-        val col = Modifier.weight(1f).height(kh)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KeyGap)) {
             if (svc.prefs.bool("mathRow")) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
                 Layouts.ops.forEach { (label, commit) ->
@@ -305,20 +304,20 @@ private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
             }
             digitRows.forEachIndexed { i, r ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    r.forEach { d -> val s = d.toString(); Key(svc, c, col, s, label = s) { svc.onChar(s) } }
+                    r.forEach { d -> val s = d.toString(); Key(svc, c, Modifier.weight(1f).height(kh), s, label = s) { svc.onChar(s) } }
                     when (i) {
-                        0 -> Key(svc, c, col, "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
-                        1 -> Key(svc, c, col, "Comma", label = ",", tone = 1) { svc.onChar(",") }
-                        else -> Key(svc, c, col, "Space", icon = R.drawable.ic_space, tone = 1) { svc.onChar(" ") }
+                        0 -> Key(svc, c, Modifier.weight(1f).height(kh), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                        1 -> Key(svc, c, Modifier.weight(1f).height(kh), "Comma", label = ",", tone = 1) { svc.onChar(",") }
+                        else -> Key(svc, c, Modifier.weight(1f).height(kh), "Space", icon = R.drawable.ic_space, tone = 1) { svc.onChar(" ") }
                     }
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                Key(svc, c, col, "Back to letters. Long press for symbols.", icon = R.drawable.ic_keyboard, tone = 1,
+                Key(svc, c, Modifier.weight(1f).height(kh), "Back to letters. Long press for symbols.", icon = R.drawable.ic_keyboard, tone = 1,
                     onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.LETTERS }
-                Key(svc, c, col, "0", label = "0") { svc.onChar("0") }
-                Key(svc, c, col, "Decimal point", label = ".") { svc.onChar(".") }
-                Key(svc, c, col, "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
+                Key(svc, c, Modifier.weight(1f).height(kh), "0", label = "0") { svc.onChar("0") }
+                Key(svc, c, Modifier.weight(1f).height(kh), "Decimal point", label = ".") { svc.onChar(".") }
+                Key(svc, c, Modifier.weight(1f).height(kh), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
             }
         }
     }
