@@ -276,7 +276,7 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
             val desc = if (item.id == "version")
                 runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty()
             else item.desc
-            val note = item.id == "version" || item.id == "privacyNote" || item.id == "localNote" || item.id == "translateNote"
+            val note = item.id == "version" || item.id == "privacyNote" || item.id == "localNote" || item.id == "translateNote" || item.id == "layoutNote"
             Row(
                 Modifier.fillMaxWidth().then(if (note) Modifier else Modifier.clickable { onAction(item) })
                     .padding(horizontal = 14.dp, vertical = 10.dp).heightIn(min = 52.dp),
