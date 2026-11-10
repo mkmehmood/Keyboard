@@ -128,7 +128,9 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
             if (svc.progress != null) ProgressCard(svc, c)
             // toolbar and suggestions sit directly on the keyboard background, with no panel behind them
             Column(Modifier.fillMaxWidth()) {
-                if (svc.panel == Panel.NONE) { if (svc.mode != Mode.NUMPAD) Strip(svc, c) } else if (p.bool("showToolbar")) Toolbar(svc, c)
+                if (svc.panel == Panel.NONE && svc.mode != Mode.NUMPAD) Strip(svc, c)
+                // the number pad has no suggestions, only the tool icons
+                else if (p.bool("showToolbar")) Toolbar(svc, c)
             }
             when (svc.panel) {
                 Panel.NONE -> Keys(svc, c, h)
@@ -315,30 +317,44 @@ private fun LettersView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 
 @Composable
 private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
-    val gap = Arrangement.spacedBy(KeyGap)
     val sc = keyScale(svc.prefs)
+    val g = KeyGap
+    val kh = 54.dp * sc
+    val gap = Arrangement.spacedBy(g)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // compact: operators, then the digits, then the other keys. Each row fills the width.
-        val kh = 40.dp * sc
-        Column(Modifier.fillMaxWidth(sc).align(Alignment.Center), verticalArrangement = Arrangement.spacedBy(KeyGap)) {
-            if (svc.prefs.bool("mathRow")) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                Layouts.ops.forEach { (label, commit) ->
-                    Key(svc, c, Modifier.weight(1f).height(kh), label, label = label, tone = 1) {
-                        if (commit == "=") svc.onEquals() else svc.commitText(commit)
+        // three columns: operators and ABC on the left, a large 3x3 digit block with a bottom row in the middle, %, space, backspace and enter on the right
+        Row(Modifier.fillMaxWidth(sc).align(Alignment.Center), horizontalArrangement = gap) {
+            Column(Modifier.weight(0.62f), verticalArrangement = gap) {
+                val opH = (kh * 3 + g * 2 - g * 3) / 4
+                listOf("+", "-", "*", "/").forEach { o ->
+                    Key(svc, c, Modifier.fillMaxWidth().height(opH), o, label = o, tone = 1) { svc.commitText(o) }
+                }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Back to letters. Long press for symbols.", label = "ABC", tone = 1,
+                    onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.LETTERS }
+            }
+            Column(Modifier.weight(3f), verticalArrangement = gap) {
+                listOf("123", "456", "789").forEach { r ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                        r.forEach { d -> val k = d.toString(); Key(svc, c, Modifier.weight(1f).height(kh), k, label = k) { svc.onChar(k) } }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                    Row(Modifier.weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Comma", label = ",", tone = 1) { svc.onChar(",") }
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
+                    }
+                    Key(svc, c, Modifier.weight(1f).height(kh), "0", label = "0") { svc.onChar("0") }
+                    Row(Modifier.weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Equals", label = "=", tone = 1) { svc.onEquals() }
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Decimal point", label = ".", tone = 1) { svc.onChar(".") }
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                "1234567890".forEach { d -> val s = d.toString(); Key(svc, c, Modifier.weight(1f).height(kh), s, label = s) { svc.onChar(s) } }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                Key(svc, c, Modifier.weight(1.2f).height(kh), "Back to letters. Long press for symbols.", icon = R.drawable.ic_keyboard, tone = 1,
-                    onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.LETTERS }
-                Key(svc, c, Modifier.weight(1f).height(kh), "Comma", label = ",", tone = 1) { svc.onChar(",") }
-                Key(svc, c, Modifier.weight(1f).height(kh), "Decimal point", label = ".", tone = 1) { svc.onChar(".") }
-                SpaceKey(svc, c, Modifier.weight(2.2f).height(kh))
-                Key(svc, c, Modifier.weight(1.2f).height(kh), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
-                Key(svc, c, Modifier.weight(1.2f).height(kh), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
+            Column(Modifier.weight(0.62f), verticalArrangement = gap) {
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Percent", label = "%", tone = 1) { svc.commitText("%") }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Space", icon = R.drawable.ic_space, tone = 1) { svc.onChar(" ") }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
             }
         }
     }

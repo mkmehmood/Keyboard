@@ -57,8 +57,7 @@ object Defs {
             Toggle("accentPopup", "Long-press accents and alternates", true),
             Toggle("langKey", "Language switch key", true)
         )),
-        Section("numpad", "Number pad", "Operators, numbers, then other keys", R.drawable.ic_numpad, listOf(
-            Toggle("mathRow", "Show operators row (always on top)", true),
+        Section("numpad", "Number pad", "Layout and auto-switch", R.drawable.ic_numpad, listOf(
             Toggle("autoNumPad", "Switch to number pad in number and phone fields", true)
         )),
         Section("clip", "Clipboard", "Unlimited size, history on", R.drawable.ic_clipboard, listOf(
