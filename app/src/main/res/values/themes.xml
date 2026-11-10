@@ -1,0 +1,4 @@
+<resources>
+    <style name="Theme.EverydayKeys" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="Theme.Voice" parent="android:Theme.Translucent.NoTitleBar" />
+</resources>

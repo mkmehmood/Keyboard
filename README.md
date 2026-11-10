@@ -1,0 +1,31 @@
+# Everyday Keys
+
+A privacy-first Android keyboard: **unlimited clipboard history**, a **full number pad**, and an **icon-only interface**. Kotlin, Jetpack Compose, Room, DataStore.
+
+## Get the app
+
+Every push to `main` builds a signed APK and publishes it under **Releases**. Download the latest `EverydayKeys-v*.apk`, install it, open the app and follow the two steps on the status card (enable, then switch).
+
+## What works
+
+- **Layouts:** QWERTY, Urdu, Arabic, Hindi (enable in Settings, cycle with the globe key); shift / caps lock (double tap); optional number row; long-press accents; number pad (phone or calculator order, operators row, `=` evaluates the expression before the cursor); two symbol pages; one-handed mode (left / right).
+- **Clipboard:** every copy is saved; pin, search, delete, clear all, merge several items into one paste. Text over 20,000 characters is stored as a file with only a reference in the database. Pasting streams in 50–100 K chunks with a progress bar and cancel.
+- **Privacy:** password and sensitive fields are never saved; no internet permission.
+- **Toolbar:** clipboard, snippets (`;addr` style shortcuts expand on space), voice typing, translate selection, undo/redo, cursor + select all/copy/cut/paste panel, spacebar cursor drag, emoji with recents and search.
+- **Smart typing:** autocorrect (off / mild / strong), word completion, personal dictionary, auto-capitalization, double-space period. All local.
+- **Settings:** 11 sections, instant apply, per-section reset, search, status card, backup/restore to one JSON file.
+- **Access:** every button is a vector icon (only the emoji panel shows emoji); TalkBack labels on keys.
+
+Tip: long-press the number-pad key to open symbols.
+
+## Not built yet (roadmap)
+
+Glide typing, floating keyboard mode, biometric lock for clipboard history, unit converter, drag-to-reorder toolbar and languages, swap-last-items shortcut, bigram next-word prediction (suggestions are prefix completions today).
+
+## Build
+
+Open in Android Studio (JDK 17) or run `./gradlew assembleRelease`. Release signing reads `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. In CI, add repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` for a stable signing key; without them a throwaway key is generated per build (APKs install, but you cannot update over a build signed with a different key).
+
+## Licenses
+
+MIT (see LICENSE). Uses AndroidX, Jetpack Compose, Room, DataStore, kotlinx.coroutines (Apache-2.0). Bundled English word list: first20hours/google-10000-english (derived from Google's Trillion Word Corpus).
