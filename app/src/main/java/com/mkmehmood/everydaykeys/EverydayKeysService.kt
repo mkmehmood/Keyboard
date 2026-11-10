@@ -180,7 +180,7 @@ class EverydayKeysService : InputMethodService() {
     }
 
     fun pasteClip(c: Clip) { scope.launch { pasteLarge(ClipStore.read(c)) } }
-    fun pasteMany(list: List<Clip>) { scope.launch { pasteLarge(list.joinToString("\n") { ClipStore.read(it) }) } }
+    fun pasteMany(list: List<Clip>) { scope.launch { val parts = ArrayList<String>(); for (c in list) parts.add(ClipStore.read(c)); pasteLarge(parts.joinToString("\n")) } }
     fun pasteLatest() { scope.launch { Graph.db(this@EverydayKeysService).clips().latest()?.let { pasteClip(it) } } }
 
     // ---------- shortcuts ----------
