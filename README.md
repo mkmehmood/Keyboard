@@ -10,9 +10,9 @@ Every push to `main` builds a signed APK and publishes it under **Releases**. Do
 
 - **Layouts:** QWERTY, Urdu, Arabic, Hindi (enable in Settings, cycle with the globe key); shift / caps lock (double tap); optional number row; long-press accents; number pad (phone or calculator order, operators row, `=` evaluates the expression before the cursor); two symbol pages; one-handed mode (left / right).
 - **Clipboard:** every copy is saved; pin, search, delete, clear all, merge several items into one paste. Text over 20,000 characters is stored as a file with only a reference in the database. Pasting streams in 50–100 K chunks with a progress bar and cancel.
-- **Privacy:** password and sensitive fields are never saved; no internet permission.
-- **Toolbar:** clipboard, snippets (`;addr` style shortcuts expand on space), voice typing, translate selection, undo/redo, cursor + select all/copy/cut/paste panel, spacebar cursor drag, emoji with recents and search.
-- **Smart typing:** autocorrect (off / mild / strong), word completion, personal dictionary, auto-capitalization, double-space period. All local.
+- **Privacy:** password and sensitive fields are never saved; optional lock for clipboard history (fingerprint or screen lock); typing stays on the device (the internet is used only for Translate and the optional live suggestions, see PRIVACY.md); API keys are encrypted with the Android Keystore.
+- **Toolbar:** clipboard, snippets (`;addr` style shortcuts expand on space), voice typing, translate selection, undo/redo, cursor + select all/copy/cut/paste panel, unit converter (length, weight, volume, speed, data, temperature), spacebar cursor drag, emoji with recents and search. Reorder tools and languages with arrows in Settings.
+- **Smart typing:** autocorrect (off / mild / strong), word completion, next-word suggestions learned on your phone, personal dictionary, auto-capitalization, double-space period, key preview popup. All local.
 - **Settings:** 11 sections, instant apply, per-section reset, search, status card, backup/restore to one JSON file.
 - **Access:** every button is a vector icon (only the emoji panel shows emoji); TalkBack labels on keys.
 
@@ -20,7 +20,7 @@ Tip: long-press the number-pad key to open symbols.
 
 ## Not built yet (roadmap)
 
-Glide typing, floating keyboard mode, biometric lock for clipboard history, unit converter, drag-to-reorder toolbar and languages, swap-last-items shortcut, bigram next-word prediction (suggestions are prefix completions today).
+Glide typing and floating keyboard mode. Both need testing on real devices to tune, so they are not shipped yet.
 
 ## Build
 

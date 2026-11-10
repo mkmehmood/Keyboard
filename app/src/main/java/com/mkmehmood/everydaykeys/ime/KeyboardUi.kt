@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -41,14 +44,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import android.view.KeyEvent
 import com.mkmehmood.everydaykeys.R
 import com.mkmehmood.everydaykeys.data.AppDb
+import com.mkmehmood.everydaykeys.data.Calc
 import com.mkmehmood.everydaykeys.data.Clip
+import com.mkmehmood.everydaykeys.data.UnitDef
+import com.mkmehmood.everydaykeys.data.Units
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+
+/** Height of the suggestion strip. It is always reserved so the keyboard does not jump while typing. */
+private val StripH = 44.dp
 
 class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color) {
     companion object {
@@ -81,6 +92,7 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
                 Panel.SNIPPETS -> SnippetPanel(svc, c)
                 Panel.EMOJI -> { EmojiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.CURSOR -> CursorPanel(svc, c, h)
+                Panel.CONVERT -> ConvertPanel(svc, c)
             }
         }
     }
@@ -151,13 +163,23 @@ fun Key(
     Box(m, contentAlignment = Alignment.Center) {
         if (icon != null) Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(22.dp))
         else if (label != null) Text(label, color = fg, fontSize = p.int("fontSize").sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        if (pressed && tone == 0 && label != null && label.length <= 2 && label.isNotBlank() && p.bool("keyPreview")) {
+            val lift = with(LocalDensity.current) { 70.dp.roundToPx() }
+            val bubble = RoundedCornerShape(12.dp)
+            Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -lift)) {
+                Box(
+                    Modifier.size(52.dp, 64.dp).clip(bubble).background(c.key).border(1.dp, c.sub.copy(alpha = 0.4f), bubble),
+                    contentAlignment = Alignment.Center
+                ) { Text(label, color = c.text, fontSize = 30.sp, fontWeight = FontWeight.Medium) }
+            }
+        }
     }
 }
 
 @Composable
 private fun IconTap(icon: Int, desc: String, c: KbColors, tint: Color = c.text, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable(onClickLabel = desc, role = Role.Button) { onClick() },
+        Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClickLabel = desc, role = Role.Button) { onClick() },
         contentAlignment = Alignment.Center
     ) { Icon(painterResource(icon), desc, tint = tint, modifier = Modifier.size(22.dp)) }
 }
@@ -301,6 +323,7 @@ private fun tool(id: String): Tool? = when (id) {
     "undo" -> Tool(R.drawable.ic_undo, "Undo") { it.undo() }
     "redo" -> Tool(R.drawable.ic_redo, "Redo") { it.redo() }
     "cursor" -> Tool(R.drawable.ic_code, "Cursor and edit keys") { it.openPanel(Panel.CURSOR) }
+    "convert" -> Tool(R.drawable.ic_ruler, "Unit converter") { it.openPanel(Panel.CONVERT) }
     "settings" -> Tool(R.drawable.ic_settings, "Settings") { it.openSettings() }
     else -> null
 }
@@ -308,7 +331,7 @@ private fun tool(id: String): Tool? = when (id) {
 @Composable
 private fun Toolbar(svc: EveryDayKeysService, c: KbColors) {
     val ids = svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
-    Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         ids.forEach { id -> tool(id)?.let { t -> IconTap(t.icon, t.desc, c, c.text) { svc.feedback(); t.run(svc) } } }
     }
 }
@@ -320,8 +343,8 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val alts = svc.alts
     val items = alts ?: svc.suggestions
     val pending = if (alts == null && svc.showClipChip) svc.pendingClip else null
-    if (items.isEmpty() && pending == null) return
-    Row(Modifier.fillMaxWidth().height(38.dp), verticalAlignment = Alignment.CenterVertically) {
+    if (items.isEmpty() && pending == null) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
+    Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
         items.forEachIndexed { i, s ->
             if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.sub.copy(alpha = 0.4f)))
@@ -336,7 +359,7 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayKeysService.Trans) {
-    Row(Modifier.fillMaxWidth().height(38.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(R.drawable.ic_translate), null, tint = c.accent, modifier = Modifier.padding(horizontal = 10.dp).size(20.dp))
         val ok = tr.result != null
         Text(
@@ -401,9 +424,30 @@ private fun SearchBox(svc: EveryDayKeysService, c: KbColors, hint: String, modif
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ClipPanel(svc: EveryDayKeysService, c: KbColors) {
+    if (svc.clipUnlocked) ClipPanelBody(svc, c) else LockedClipPanel(svc, c)
+}
+
+@Composable
+private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
+    Column(
+        Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+    ) {
+        Icon(painterResource(R.drawable.ic_lock), null, tint = c.accent, modifier = Modifier.size(32.dp))
+        Text("Clipboard history is locked", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        Text("Use your fingerprint or screen lock to open it.", color = c.sub, fontSize = 13.sp, modifier = Modifier.padding(bottom = 12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Key(svc, c, Modifier.width(120.dp).height(48.dp), "Unlock clipboard history", icon = R.drawable.ic_lock, tone = 2) { svc.requestUnlock() }
+            Key(svc, c, Modifier.width(120.dp).height(48.dp), "Back to keyboard", icon = R.drawable.ic_keyboard, tone = 1) { svc.closePanel() }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     val list by remember(svc.query) { svc.clips.observe(svc.query) }.collectAsState(initial = emptyList<Clip>())
     val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf(setOf<Long>()) }
@@ -510,6 +554,50 @@ private fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
                 Box(Modifier.height(42.dp).clickable(onClickLabel = "Insert emoji") { svc.commitEmoji(e) }, contentAlignment = Alignment.Center) {
                     Text(e, fontSize = 24.sp)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConvertPanel(svc: EveryDayKeysService, c: KbColors) {
+    val cat = Units.cats[svc.convCat]
+    val from = cat.units[svc.convFrom.coerceIn(0, cat.units.lastIndex)]
+    val to = cat.units[svc.convTo.coerceIn(0, cat.units.lastIndex)]
+    val v = svc.convText.replace(",", "").toDoubleOrNull()
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconTap(R.drawable.ic_chevron_left, "Previous category", c) { svc.convStep(-1) }
+            Text(cat.name, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            IconTap(R.drawable.ic_chevron_right, "Next category", c) { svc.convStep(1) }
+            IconTap(R.drawable.ic_close, "Close converter", c) { svc.closePanel() }
+        }
+        UnitRow("From", cat.units, svc.convFrom, c) { svc.convFrom = it }
+        UnitRow("To", cat.units, svc.convTo, c) { svc.convTo = it }
+        Text(
+            if (v == null) "Type or select a number first, then open the converter."
+            else "${Calc.format(v)} ${from.id} = ${Calc.format(Units.convert(cat, v, from, to))} ${to.id}",
+            color = c.text, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (v != null) Key(svc, c, Modifier.weight(1f).height(48.dp), "Replace the number with the result", icon = R.drawable.ic_check, tone = 2) { svc.convInsert() }
+            Key(svc, c, Modifier.weight(1f).height(48.dp), "Back to keyboard", icon = R.drawable.ic_keyboard, tone = 1) { svc.closePanel() }
+        }
+    }
+}
+
+@Composable
+private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbColors, onPick: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = c.sub, fontSize = 13.sp, modifier = Modifier.width(44.dp).padding(start = 6.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            itemsIndexed(units) { i, u ->
+                val on = i == selected
+                Text(
+                    u.name, color = if (on) Color.White else c.text, fontSize = 15.sp, maxLines = 1,
+                    modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) c.accent else c.key)
+                        .clickable(onClickLabel = "Choose ${u.name}") { onPick(i) }.padding(horizontal = 14.dp, vertical = 12.dp)
+                )
             }
         }
     }

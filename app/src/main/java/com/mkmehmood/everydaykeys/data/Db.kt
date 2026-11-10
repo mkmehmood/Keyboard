@@ -2,6 +2,8 @@ package com.mkmehmood.everydaykeys.data
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "clips")
@@ -12,7 +14,9 @@ data class Clip(
     val inlineText: String? = null,
     val filePath: String? = null,
     val pinned: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** SHA-256 of large (file-backed) text, so the same document copied twice is stored once. */
+    val hash: String? = null
 )
 
 @Entity(tableName = "snippets")
@@ -42,6 +46,7 @@ interface ClipDao {
     @Query("DELETE FROM clips WHERE pinned = 0") suspend fun clearUnpinned()
     @Query("DELETE FROM clips") suspend fun clear()
     @Query("SELECT * FROM clips WHERE inlineText = :t LIMIT 1") suspend fun findInline(t: String): Clip?
+    @Query("SELECT * FROM clips WHERE hash = :h LIMIT 1") suspend fun findByHash(h: String): Clip?
     @Query("SELECT * FROM clips WHERE pinned = 0 AND createdAt < :t") suspend fun older(t: Long): List<Clip>
 }
 
@@ -63,7 +68,13 @@ interface WordDao {
     @Query("DELETE FROM words") suspend fun clear()
 }
 
-@Database(entities = [Clip::class, Snippet::class, Word::class], version = 1, exportSchema = false)
+private val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE clips ADD COLUMN hash TEXT")
+    }
+}
+
+@Database(entities = [Clip::class, Snippet::class, Word::class], version = 2, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun clips(): ClipDao
     abstract fun snippets(): SnippetDao
@@ -72,7 +83,7 @@ abstract class AppDb : RoomDatabase() {
     companion object {
         @Volatile private var inst: AppDb? = null
         fun get(c: Context): AppDb = inst ?: synchronized(this) {
-            inst ?: Room.databaseBuilder(c.applicationContext, AppDb::class.java, "everyday.db").build().also { inst = it }
+            inst ?: Room.databaseBuilder(c.applicationContext, AppDb::class.java, "everyday.db").addMigrations(MIGRATION_1_2).build().also { inst = it }
         }
     }
 }

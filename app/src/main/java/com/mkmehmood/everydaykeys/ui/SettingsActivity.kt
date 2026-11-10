@@ -232,7 +232,7 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
                 }
             }
         }
-        is Multi -> Column(Modifier.padding(vertical = 6.dp)) {
+        is Multi -> if (item.key == "toolbarItems" || item.key == "languages") OrderedMulti(item, prefs, set) else Column(Modifier.padding(vertical = 6.dp)) {
             Text(item.title)
             val cur = prefs.str(item.key).split(",").filter { it.isNotBlank() }
             item.options.forEach { (v, l) ->
@@ -272,6 +272,33 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
     }
 }
 
+/** A list whose order matters: enabled items first with move up, move down and remove buttons, then the rest to add. */
+@Composable
+private fun OrderedMulti(item: Multi, prefs: Prefs, set: (String, String) -> Unit) {
+    val cur = prefs.str(item.key).split(",").filter { id -> id.isNotBlank() && item.options.any { it.first == id } }
+    val labels = item.options.toMap()
+    fun save(l: List<String>) = set(item.key, l.joinToString(","))
+    Column(Modifier.padding(vertical = 6.dp)) {
+        Text(item.title)
+        cur.forEachIndexed { i, id ->
+            val name = labels[id] ?: id
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("${i + 1}", Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(name, Modifier.weight(1f))
+                IconButton(onClick = { save(cur.toMutableList().also { it.add(i - 1, it.removeAt(i)) }) }, enabled = i > 0) { Ic(R.drawable.ic_up, "Move $name up") }
+                IconButton(onClick = { save(cur.toMutableList().also { it.add(i + 1, it.removeAt(i)) }) }, enabled = i < cur.lastIndex) { Ic(R.drawable.ic_down, "Move $name down") }
+                IconButton(onClick = { save(cur - id) }, enabled = cur.size > 1) { Ic(R.drawable.ic_close, "Remove $name") }
+            }
+        }
+        item.options.filter { it.first !in cur }.forEach { (id, name) ->
+            Row(Modifier.fillMaxWidth().clickable { save(cur + id) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ic(R.drawable.ic_add, "Add $name", size = 20.dp)
+                Text(name, Modifier.padding(start = 12.dp))
+            }
+        }
+    }
+}
+
 private class Confirm(val text: String, val run: () -> Unit)
 
 @Composable
@@ -299,12 +326,12 @@ fun SectionScreen(id: String, nav: NavController) {
             "clearClips" -> confirm = Confirm("Clear all unpinned clipboard history?") {
                 scope.launch { ClipRepo(ctx).clearUnpinned(); usage = ClipRepo(ctx).usageBytes() }
             }
-            "resetDict" -> confirm = Confirm("Remove all personal dictionary words?") {
-                scope.launch { AppDb.get(ctx).words().clear(); toast("Dictionary reset") }
+            "resetDict" -> confirm = Confirm("Remove your personal words and learned word pairs?") {
+                scope.launch { AppDb.get(ctx).words().clear(); Bigrams.clear(ctx); toast("Dictionary reset") }
             }
             "wipeAll" -> confirm = Confirm("Delete clipboard, snippets, dictionary and settings? This cannot be undone.") {
                 scope.launch {
-                    ClipRepo(ctx).clearAll(); AppDb.get(ctx).snippets().clear(); AppDb.get(ctx).words().clear()
+                    ClipRepo(ctx).clearAll(); AppDb.get(ctx).snippets().clear(); AppDb.get(ctx).words().clear(); Bigrams.clear(ctx)
                     ctx.store.edit { it.clear() }; Launcher.apply(ctx, false); toast("All data deleted")
                 }
             }

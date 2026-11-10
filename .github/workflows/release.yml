@@ -48,6 +48,12 @@ jobs:
             echo "KEY_PASSWORD=$KP"
           } >> "$GITHUB_ENV"
 
+      - name: Unit tests
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest --console=plain
+
       - name: Build release APK
         shell: bash
         run: |

@@ -32,12 +32,13 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.mkmehmood.everydaykeys.data.*
 import com.mkmehmood.everydaykeys.ui.SettingsActivity
+import com.mkmehmood.everydaykeys.ui.UnlockActivity
 import com.mkmehmood.everydaykeys.ui.VoiceActivity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 
 enum class Mode { LETTERS, NUMPAD, SYM1, SYM2, SYM3, SYM4 }
-enum class Panel { NONE, CLIP, SNIPPETS, EMOJI, CURSOR }
+enum class Panel { NONE, CLIP, SNIPPETS, EMOJI, CURSOR, CONVERT }
 enum class Shift { OFF, ONCE, LOCK }
 
 class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
@@ -69,7 +70,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     var suggestions by mutableStateOf(listOf<String>())
     /** Most recently copied item that has not been pasted yet; shown in the suggestion bar. */
     var pendingClip by mutableStateOf<Clip?>(null)
-    val showClipChip: Boolean get() = pendingClip != null && !sensitive
+    val showClipChip: Boolean get() = pendingClip != null && !sensitive && clipUnlocked
     class Trans(val result: String? = null, val message: String? = null, val replaceLen: Int = 0)
     var trans by mutableStateOf<Trans?>(null)
     private var transJob: kotlinx.coroutines.Job? = null
@@ -78,6 +79,23 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     var progress by mutableStateOf<Float?>(null)
     var searching by mutableStateOf(false)
     var query by mutableStateOf("")
+
+    // ---- clipboard lock ----
+    private var clipUnlockedAt by mutableStateOf(-1_000_000L)
+    private var reopenClip = false
+    val clipLockOn: Boolean get() = prefs.bool("clipLock")
+    /** True when the lock is off, or the user passed fingerprint / screen lock in the last minute. */
+    val clipUnlocked: Boolean get() = !clipLockOn || SystemClock.uptimeMillis() - clipUnlockedAt < 60_000
+    fun requestUnlock() = launch(Intent(this, UnlockActivity::class.java))
+    fun unlockClips() { clipUnlockedAt = SystemClock.uptimeMillis(); reopenClip = true }
+
+    // ---- unit converter ----
+    var convCat by mutableStateOf(0)
+    var convFrom by mutableStateOf(0)
+    var convTo by mutableStateOf(1)
+    var convText by mutableStateOf("")
+    private var convLen = 0
+    private var learned = 0
 
     val langs: List<String>
         get() = prefs.str("languages").split(",").filter { it in Layouts.letters.keys }.ifEmpty { listOf("en") }
@@ -97,8 +115,9 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 if (clip.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE", false) == true) return
             }
             if (clip.itemCount == 0) return
-            val t = clip.getItemAt(0)?.coerceToText(this@EveryDayKeysService)?.toString() ?: return
             scope.launch {
+                // Reading the clip (it may be a large text or a content URI) happens off the main thread.
+                val t = withContext(Dispatchers.IO) { clip.getItemAt(0)?.coerceToText(this@EveryDayKeysService)?.toString() } ?: return@launch
                 clips.add(t)
                 pendingClip = withContext(Dispatchers.IO) { AppDb.get(this@EveryDayKeysService).clips().latest() }
             }
@@ -118,6 +137,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         scope.launch(Dispatchers.IO) {
             Suggest.load(this@EveryDayKeysService)
             db.words().personalList().forEach { Suggest.learn(it.word) }
+            Bigrams.load(this@EveryDayKeysService)
         }
         scope.launch { SettingsRepo.flow(this@EveryDayKeysService).collect { prefs = it } }
         scope.launch {
@@ -166,6 +186,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 v != InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS && v != InputType.TYPE_TEXT_VARIATION_URI &&
                 (editorInfo.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) == 0
         closePanel()
+        if (reopenClip) { reopenClip = false; openPanel(Panel.CLIP) }
         progress = null
         alts = null
         trans = null
@@ -174,6 +195,11 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         shift = Shift.OFF
         updateAutoCap()
         refreshSuggestions()
+    }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        super.onFinishInputView(finishingInput)
+        scope.launch(Dispatchers.IO) { Bigrams.save(this@EveryDayKeysService) }
     }
 
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
@@ -228,9 +254,22 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         snippetMap[tok]?.let { ic.deleteSurroundingText(tok.length, 0); ic.commitText(it, 1); return }
         val word = before.takeLastWhile { it.isLetter() || it == '\'' }
         val level = when (prefs.str("autocorrect")) { "mild" -> 1; "strong" -> 2; else -> 0 }
+        var finalWord = word
         if (level > 0 && lang == "en" && word.isNotEmpty()) {
-            Suggest.correct(word, level)?.let { ic.deleteSurroundingText(word.length, 0); ic.commitText(it, 1) }
+            Suggest.correct(word, level)?.let { ic.deleteSurroundingText(word.length, 0); ic.commitText(it, 1); finalWord = it }
         }
+        if (lang == "en") learnPair(before.dropLast(word.length), finalWord)
+    }
+
+    /** Remembers that [word] followed the word before it, for next-word suggestions. Only runs in normal text fields. */
+    private fun learnPair(beforeWord: String, word: String) {
+        if (!prefs.bool("nextWord") || word.length < 2) return
+        val gap = beforeWord.takeLastWhile { it == ' ' }
+        if (gap.isEmpty()) return
+        val prev = beforeWord.dropLast(gap.length).takeLastWhile { it.isLetter() || it == '\'' }
+        if (prev.isEmpty()) return
+        Bigrams.learn(prev, word)
+        if (++learned % 25 == 0) scope.launch(Dispatchers.IO) { Bigrams.save(this@EveryDayKeysService) }
     }
 
     fun onBackspace() {
@@ -283,7 +322,11 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         if (!smart || !prefs.bool("suggestions") || lang != "en") { suggestions = emptyList(); return }
         val b = currentInputConnection?.getTextBeforeCursor(32, 0)?.toString().orEmpty()
         val w = b.takeLastWhile { it.isLetter() || it == '\'' }
-        if (w.isEmpty()) { suggestions = emptyList(); return }
+        if (w.isEmpty()) {
+            val prev = if (prefs.bool("nextWord") && b.endsWith(" ")) b.trimEnd().takeLastWhile { it.isLetter() || it == '\'' } else ""
+            suggestions = if (prev.isEmpty()) emptyList() else Bigrams.next(prev, 3)
+            return
+        }
         val local = Suggest.complete(w, 6)
         suggestions = local.take(3)
         if (w.length >= 2 && prefs.bool("onlineSuggestions")) {
@@ -302,6 +345,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         val w = b.takeLastWhile { it.isLetter() || it == '\'' }
         ic.deleteSurroundingText(w.length, 0)
         ic.commitText("$s ", 1)
+        if (lang == "en") learnPair(b.dropLast(w.length), s)
         afterTyped()
     }
 
@@ -319,6 +363,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     /** Paste the newest history item through the chunked path, so size never matters. */
     fun paste() {
+        if (!clipUnlocked) { requestUnlock(); return }
         scope.launch {
             val latest = withContext(Dispatchers.IO) { AppDb.get(this@EveryDayKeysService).clips().latest() }
             if (latest != null) pasteClips(listOf(latest)) else currentInputConnection?.performContextMenuAction(android.R.id.paste)
@@ -361,7 +406,42 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     // ---- panels / launching ----
-    fun openPanel(p: Panel) { panel = p; searching = false; query = "" }
+    fun openPanel(p: Panel) {
+        panel = p; searching = false; query = ""
+        if (p == Panel.CONVERT) captureConvInput()
+    }
+
+    /** Picks the number to convert: the selection, or the number just before the cursor. */
+    private fun captureConvInput() {
+        val ic = currentInputConnection ?: run { convText = ""; convLen = 0; return }
+        val sel = ic.getSelectedText(0)?.toString().orEmpty().trim()
+        if (sel.replace(",", "").toDoubleOrNull() != null) { convText = sel; convLen = 0; return }
+        val digits = ic.getTextBeforeCursor(40, 0)?.toString().orEmpty().takeLastWhile { it.isDigit() || it == '.' || it == ',' || it == '-' }
+        convText = digits
+        convLen = digits.length
+    }
+
+    fun convStep(d: Int) {
+        val n = Units.cats.size
+        convCat = (convCat + d + n) % n
+        convFrom = 0
+        convTo = 1
+    }
+
+    /** Replaces the number with the converted value and its unit, for example "5 km" becomes "3.10685596 mi". */
+    fun convInsert() {
+        val cat = Units.cats[convCat]
+        val v = convText.replace(",", "").toDoubleOrNull() ?: return
+        val to = cat.units[convTo.coerceIn(0, cat.units.lastIndex)]
+        val from = cat.units[convFrom.coerceIn(0, cat.units.lastIndex)]
+        val ic = currentInputConnection ?: return
+        ic.beginBatchEdit()
+        if (convLen > 0) ic.deleteSurroundingText(convLen, 0)
+        ic.commitText(Calc.format(Units.convert(cat, v, from, to)) + " " + to.id, 1)
+        ic.endBatchEdit()
+        closePanel()
+        afterTyped()
+    }
     fun closePanel() { panel = Panel.NONE; searching = false; query = "" }
 
     private fun launch(i: Intent) = startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

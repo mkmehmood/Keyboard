@@ -7,6 +7,7 @@ import java.io.File
 import java.io.FileReader
 import java.io.Reader
 import java.io.StringReader
+import java.security.MessageDigest
 import java.util.UUID
 
 /** Small clips live in Room. Anything above INLINE_MAX chars is written to a file and only referenced. */
@@ -29,10 +30,27 @@ class ClipRepo(ctx: Context) {
                 dao.insert(Clip(preview = preview, length = text.length, inlineText = text, pinned = pinned))
             }
         } else {
+            val hash = sha256(text)
+            val existing = dao.findByHash(hash)
+            if (existing != null) {
+                dao.update(existing.copy(createdAt = System.currentTimeMillis(), pinned = existing.pinned || pinned))
+                return@withContext
+            }
             val f = File(dir, UUID.randomUUID().toString() + ".txt")
             f.writeText(text)
-            dao.insert(Clip(preview = preview, length = text.length, filePath = f.absolutePath, pinned = pinned))
+            dao.insert(Clip(preview = preview, length = text.length, filePath = f.absolutePath, pinned = pinned, hash = hash))
         }
+    }
+
+    private fun sha256(text: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        var i = 0
+        while (i < text.length) {
+            val e = minOf(i + 65_536, text.length)
+            md.update(text.substring(i, e).toByteArray())
+            i = e
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
 
     suspend fun text(c: Clip): String = withContext(Dispatchers.IO) { c.inlineText ?: File(c.filePath!!).readText() }

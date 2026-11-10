@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- No INTERNET permission on purpose: the keyboard cannot send keystrokes anywhere. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Used only for Translate (when the user taps it) and the optional live word suggestions. Nothing else goes online. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -36,6 +36,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+
+        <activity
+            android:name=".ui.UnlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Voice" />
 
         <activity
             android:name=".ui.VoiceActivity"

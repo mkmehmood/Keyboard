@@ -14,7 +14,10 @@ val Context.store: DataStore<Preferences> by preferencesDataStore("everyday_keys
 
 /** Every setting is stored as a string; defaults come from [Defs]. */
 class Prefs(private val p: Preferences) {
-    fun str(k: String): String = p[stringPreferencesKey(k)] ?: Defs.default(k)
+    fun str(k: String): String {
+        val raw = p[stringPreferencesKey(k)] ?: Defs.default(k)
+        return if (Secrets.isSecretKey(k)) Secrets.decrypt(raw) else raw
+    }
     fun bool(k: String): Boolean = str(k) == "true"
     fun int(k: String): Int = str(k).toIntOrNull() ?: Defs.default(k).toIntOrNull() ?: 0
 }
@@ -22,7 +25,8 @@ class Prefs(private val p: Preferences) {
 object SettingsRepo {
     fun flow(ctx: Context): Flow<Prefs> = ctx.store.data.map { Prefs(it) }
     suspend fun set(ctx: Context, key: String, value: String) {
-        ctx.store.edit { it[stringPreferencesKey(key)] = value }
+        val stored = if (Secrets.isSecretKey(key)) Secrets.encrypt(value) else value
+        ctx.store.edit { it[stringPreferencesKey(key)] = stored }
         if (key == "hideLauncher") Launcher.apply(ctx, value == "true")
     }
     suspend fun reset(ctx: Context, keys: List<String>) {
@@ -43,12 +47,12 @@ class Section(val id: String, val title: String, val desc: String, val icon: Int
 object Defs {
     private val tools = listOf(
         "clip" to "Clipboard", "snip" to "Snippets", "voice" to "Voice typing", "translate" to "Translate",
-        "undo" to "Undo", "redo" to "Redo", "cursor" to "Cursor and edit keys", "settings" to "Settings"
+        "undo" to "Undo", "redo" to "Redo", "cursor" to "Cursor and edit keys", "convert" to "Unit converter", "settings" to "Settings"
     )
 
     val sections: List<Section> = listOf(
         Section("lang", "Languages and layouts", "English, Urdu, QWERTY", R.drawable.ic_globe, listOf(
-            Multi("languages", "Languages (tap globe key to cycle)", listOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi"), "en"),
+            Multi("languages", "Languages (arrows reorder; globe key cycles)", listOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi"), "en"),
             Toggle("numberRow", "Number row on letters", true),
             Toggle("accentPopup", "Long-press accents and alternates", true),
             Toggle("langKey", "Language switch key", true)
@@ -62,6 +66,7 @@ object Defs {
             Toggle("clipEnabled", "Save clipboard history", true),
             Choice("retention", "Keep history", listOf("forever" to "Forever", "1" to "1 day", "7" to "1 week", "30" to "1 month"), "forever"),
             Toggle("skipSensitive", "Skip passwords and sensitive fields", true),
+            Toggle("clipLock", "Lock history with fingerprint or screen lock", false),
             Choice("pasteSpeed", "Large paste speed", listOf("fast" to "Fast", "balanced" to "Balanced", "safe" to "Safe"), "balanced"),
             Toggle("showProgress", "Show paste progress", true),
             Action("clearClips", "Clear clipboard history", "Pinned items are kept")
@@ -72,6 +77,7 @@ object Defs {
         Section("smart", "Smart typing", "Autocorrect, suggestions, on-device", R.drawable.ic_sparkle, listOf(
             Choice("autocorrect", "Autocorrect", listOf("off" to "Off", "mild" to "Mild", "strong" to "Strong"), "mild"),
             Toggle("suggestions", "Word suggestions", true),
+            Toggle("nextWord", "Next-word suggestions (learned on this phone)", true),
             Toggle("onlineSuggestions", "Live online suggestions", false),
             Toggle("autoCap", "Auto-capitalization", true),
             Toggle("doubleSpace", "Double-space for a period", true),
@@ -95,6 +101,7 @@ object Defs {
             Choice("oneHanded", "One-handed mode", listOf("off" to "Off", "left" to "Left", "right" to "Right"), "off")
         )),
         Section("keys", "Keys and feedback", "Vibration, sound, long-press", R.drawable.ic_vibration, listOf(
+            Toggle("keyPreview", "Key preview popup", true),
             Toggle("vibrate", "Vibration", true),
             Slide("vibMs", "Vibration strength (ms)", 5, 50, 15),
             Toggle("sound", "Key sound", false),
@@ -104,12 +111,12 @@ object Defs {
         )),
         Section("toolbar", "Toolbar", "Choose and order tools", R.drawable.ic_keyboard, listOf(
             Toggle("showToolbar", "Show toolbar", true),
-            Multi("toolbarItems", "Tools (shown in the order you enable them)", tools, "clip,snip,voice,translate,undo,redo,cursor,settings")
+            Multi("toolbarItems", "Tools (use the arrows to reorder)", tools, "clip,snip,voice,translate,undo,redo,cursor,settings")
         )),
-        Section("privacy", "Privacy and data", "Nothing leaves your phone", R.drawable.ic_lock, listOf(
+        Section("privacy", "Privacy and data", "On this phone unless you use online tools", R.drawable.ic_lock, listOf(
             Toggle("hideLauncher", "Hide app icon from the launcher", false),
-            Action("privacyNote", "No keystrokes leave your device", "No account. No analytics. The keyboard has no internet permission."),
-            Action("resetDict", "Reset learned dictionary", "Removes your personal words"),
+            Action("privacyNote", "Typing stays on your phone", "No account, no analytics. The app goes online only for Translate (when you tap it) and live suggestions (off by default). API keys are encrypted on this phone."),
+            Action("resetDict", "Reset learned dictionary", "Removes your personal words and learned word pairs"),
             Action("wipeAll", "Delete all app data", "Clipboard, snippets, dictionary, settings")
         )),
         Section("backup", "Backup and restore", "One file for everything", R.drawable.ic_download, listOf(
