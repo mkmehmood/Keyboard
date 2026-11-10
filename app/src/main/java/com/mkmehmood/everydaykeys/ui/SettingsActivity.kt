@@ -73,16 +73,17 @@ fun AppNav() {
         composable("home") { HomeScreen(nav) }
         composable("s/{id}") { SectionScreen(it.arguments?.getString("id") ?: "lang", nav) }
         composable("snippets") { SnippetsScreen(nav) }
+        composable("background") { BackgroundScreen(nav) }
         composable("dictionary") { DictScreen(nav) }
     }
 }
 
 @Composable
-private fun Ic(id: Int, desc: String? = null, tint: Color = LocalContentColor.current, size: Dp = 24.dp) =
+internal fun Ic(id: Int, desc: String? = null, tint: Color = LocalContentColor.current, size: Dp = 24.dp) =
     Icon(painterResource(id), desc, tint = tint, modifier = Modifier.size(size))
 
 @Composable
-private fun TopBar(title: String, onBack: () -> Unit) {
+internal fun TopBar(title: String, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) { Ic(R.drawable.ic_back, "Back") }
         Text(title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
@@ -321,6 +322,7 @@ fun SectionScreen(id: String, nav: NavController) {
 
     fun onAction(a: Action) {
         when (a.id) {
+            "bgEdit" -> nav.navigate("background")
             "snippets" -> nav.navigate("snippets")
             "dictionary" -> nav.navigate("dictionary")
             "clearClips" -> confirm = Confirm("Clear all unpinned clipboard history?") {
@@ -331,7 +333,7 @@ fun SectionScreen(id: String, nav: NavController) {
             }
             "wipeAll" -> confirm = Confirm("Delete clipboard, snippets, dictionary and settings? This cannot be undone.") {
                 scope.launch {
-                    ClipRepo(ctx).clearAll(); AppDb.get(ctx).snippets().clear(); AppDb.get(ctx).words().clear(); Bigrams.clear(ctx)
+                    KbBackground.delete(ctx); ClipRepo(ctx).clearAll(); AppDb.get(ctx).snippets().clear(); AppDb.get(ctx).words().clear(); Bigrams.clear(ctx)
                     ctx.store.edit { it.clear() }; Launcher.apply(ctx, false); toast("All data deleted")
                 }
             }

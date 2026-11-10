@@ -98,6 +98,11 @@ object Defs {
             Slide("keyHeight", "Key height", 40, 72, 52),
             Slide("fontSize", "Key font size", 14, 28, 20),
             Toggle("borders", "Key borders", false),
+            Action("bgEdit", "Background image", "Choose a photo, crop, zoom, dim, blur"),
+            Toggle("bgOn", "Show background image", false),
+            Slide("bgDim", "Image dimming (%)", 0, 90, 35),
+            Slide("bgBlur", "Image blur (Android 12+)", 0, 25, 0),
+            Slide("bgKeyAlpha", "Key opacity over image (%)", 30, 100, 85),
             Choice("oneHanded", "One-handed mode", listOf("off" to "Off", "left" to "Left", "right" to "Right"), "off")
         )),
         Section("keys", "Keys and feedback", "Vibration, sound, long-press", R.drawable.ic_vibration, listOf(

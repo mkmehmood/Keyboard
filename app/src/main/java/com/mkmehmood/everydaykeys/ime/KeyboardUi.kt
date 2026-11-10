@@ -2,6 +2,12 @@ package com.mkmehmood.everydaykeys.ime
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.ContentScale
+import com.mkmehmood.everydaykeys.data.KbBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -78,15 +84,34 @@ class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color
 fun KeyboardRoot(svc: EveryDayKeysService) {
     val p = svc.prefs
     val dark = when (p.str("theme")) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
-    val c = remember(dark, p.str("accent")) { KbColors.of(dark, p.str("accent")) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val base = remember(dark, p.str("accent")) { KbColors.of(dark, p.str("accent")) }
+    val bmp = remember(p.str("bgOn"), p.str("bgVersion")) { if (p.bool("bgOn")) KbBackground.load(ctx) else null }
+    val c = if (bmp == null) base else {
+        val a = p.int("bgKeyAlpha") / 100f
+        KbColors(Color.Transparent, base.key.copy(alpha = a), base.keyAlt.copy(alpha = a), base.text, base.sub, base.accent, base.panel.copy(alpha = 0.92f))
+    }
     val oh = p.str("oneHanded")
     val align = when (oh) { "left" -> Alignment.BottomStart; "right" -> Alignment.BottomEnd; else -> Alignment.BottomCenter }
     val h = p.int("keyHeight").dp
-    Box(Modifier.fillMaxWidth().background(c.bg), contentAlignment = align) {
+    Box(Modifier.fillMaxWidth().background(base.bg), contentAlignment = align) {
+        if (bmp != null) {
+            val blurDp = p.int("bgBlur")
+            Box(Modifier.matchParentSize().clipToBounds()) {
+                Image(
+                    bmp, null, Modifier.matchParentSize().then(if (blurDp > 0) Modifier.blur(blurDp.dp, BlurredEdgeTreatment.Unbounded) else Modifier),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = p.int("bgDim") / 100f)))
+        }
         Column(Modifier.fillMaxWidth(if (oh == "off") 1f else 0.78f).padding(horizontal = 4.dp, vertical = 4.dp)) {
             if (svc.progress != null) ProgressCard(svc, c)
-            if (p.bool("showToolbar")) Toolbar(svc, c)
-            if (svc.panel == Panel.NONE) Strip(svc, c)
+            // toolbar and suggestions sit on a soft panel so they stay readable over any photo
+            Column(Modifier.fillMaxWidth().then(if (bmp != null) Modifier.clip(RoundedCornerShape(12.dp)).background(base.bg.copy(alpha = 0.8f)) else Modifier)) {
+                if (p.bool("showToolbar")) Toolbar(svc, c)
+                if (svc.panel == Panel.NONE) Strip(svc, c)
+            }
             when (svc.panel) {
                 Panel.NONE -> Keys(svc, c, h)
                 Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
