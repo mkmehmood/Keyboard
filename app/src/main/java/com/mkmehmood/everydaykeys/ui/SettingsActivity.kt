@@ -267,7 +267,7 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
                     Text(item.title)
                     if (desc.isNotBlank()) Text(desc, fontSize = 13.sp, color = sub)
                 }
-                if (item.id != "version" && item.id != "privacyNote" && item.id != "localNote" && item.id != "translateNote") Ic(R.drawable.ic_chevron)
+                if (item.id != "version" && item.id != "privacyNote" && item.id != "localNote" && item.id != "translateNote" && item.id != "layoutNote") Ic(R.drawable.ic_chevron)
             }
         }
     }

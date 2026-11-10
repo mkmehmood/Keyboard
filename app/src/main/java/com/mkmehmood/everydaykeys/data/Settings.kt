@@ -47,7 +47,7 @@ class Section(val id: String, val title: String, val desc: String, val icon: Int
 object Defs {
     private val tools = listOf(
         "clip" to "Clipboard", "snip" to "Snippets", "voice" to "Voice typing", "translate" to "Translate",
-        "undo" to "Undo", "redo" to "Redo", "cursor" to "Cursor and edit keys", "convert" to "Unit converter", "settings" to "Settings"
+        "style" to "Switch layout style", "undo" to "Undo", "redo" to "Redo", "cursor" to "Cursor and edit keys", "convert" to "Unit converter", "settings" to "Settings"
     )
 
     val sections: List<Section> = listOf(
@@ -99,6 +99,10 @@ object Defs {
             Slide("fontSize", "Key font size", 12, 28, 20)
         )),
         Section("appearance", "Appearance", "Theme, accent, background", R.drawable.ic_sun, listOf(
+            Choice("layoutStyle", "Layout style", listOf("current" to "Current (uses your own settings)", "raised" to "Design 1: dark, raised keys", "flat" to "Design 2: light, flat and airy", "pro" to "Design 3: dark, high contrast, symbol hints"), "current"),
+            Choice("numpadLayout", "Number pad layout", listOf("auto" to "Follow layout style", "classic" to "Classic", "top" to "Operators on top (Design 1)", "left" to "Operators on the left (Design 2)", "circles" to "Round keys (Design 3)"), "auto"),
+            Toggle("keyHints", "Symbol hints on letter keys (long-press types them)", false),
+            Action("layoutNote", "Layout styles override theme, key shape and key style", "Choose Current to use your own settings. Add the Switch layout style tool in Toolbar to change style while typing."),
             Choice("theme", "Theme", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"), "system"),
             Choice("accent", "Accent color", listOf("teal" to "Teal", "blue" to "Blue", "purple" to "Purple", "orange" to "Orange"), "teal"),
             Toggle("borders", "Key borders", false),
