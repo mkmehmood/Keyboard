@@ -1,1 +1,1 @@
--keep class com.mkmehmood.everydaykeys.** { *; }
+-keep class com.mkmehmood.everydaykeys.ime.EveryDayKeysService { *; }

@@ -1,28 +1,29 @@
 package com.mkmehmood.everydaykeys.ui
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
-import com.mkmehmood.everydaykeys.ime.EverydayKeysService
+import com.mkmehmood.everydaykeys.ime.EveryDayKeysService
 
-/** Hands voice typing to the system recognizer and types the result into the active field. */
-class VoiceActivity : AppCompatActivity() {
+/** Invisible helper: an input method cannot start for-result activities, so voice typing goes through here. */
+class VoiceActivity : ComponentActivity() {
     private val launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        if (r.resultCode == Activity.RESULT_OK) {
-            r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let {
-                EverydayKeysService.instance?.commitVoice(it)
-            }
-        }
+        val t = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (t != null) EveryDayKeysService.instance?.commitText(t)
         finish()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        try { launcher.launch(i) } catch (e: Exception) { finish() }
+        try {
+            launcher.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM))
+        } catch (e: Exception) {
+            Toast.makeText(this, "No speech recognizer available", Toast.LENGTH_SHORT).show()
+            finish()
+        }
     }
 }

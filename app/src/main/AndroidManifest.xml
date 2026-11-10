@@ -1,51 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
+    <!-- No INTERNET permission on purpose: the keyboard cannot send keystrokes anywhere. -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
-        android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/Theme.EverydayKeys">
 
         <service
-            android:name=".ime.EverydayKeysService"
+            android:name=".ime.EveryDayKeysService"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_INPUT_METHOD">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />
             </intent-filter>
-            <meta-data
-                android:name="android.view.im"
-                android:resource="@xml/method" />
+            <meta-data android:name="android.view.im" android:resource="@xml/method" />
         </service>
 
-        <activity
-            android:name=".ui.SettingsActivity"
+        <activity android:name=".ui.SettingsActivity" android:exported="true" android:label="@string/app_name" />
+
+        <!-- Launcher entry lives on an alias so Settings can hide the app icon without disabling the screen itself. -->
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:enabled="true"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize"
-            android:label="@string/app_name">
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.SettingsActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
-
-        <activity
-            android:name=".ui.LockActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:theme="@style/AppTheme.Translucent" />
+        </activity-alias>
 
         <activity
             android:name=".ui.VoiceActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:theme="@style/AppTheme.Translucent" />
+            android:taskAffinity=""
+            android:theme="@style/Theme.Voice" />
     </application>
 </manifest>

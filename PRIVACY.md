@@ -1,11 +1,12 @@
-# Privacy
+# Privacy policy
 
-Everyday Keys is a privacy-first keyboard.
+Everyday Keys is built to keep what you type on your phone.
 
-- No keystroke ever leaves your device. There is no network permission in the app.
-- No account, no analytics, no ads.
-- Clipboard history, snippets and the learned dictionary are stored only on your phone.
-- Password and other sensitive fields are never saved to clipboard history or learned.
-- You can delete everything from Settings, Privacy and data.
+- **No keystrokes leave the device.** The keyboard app does not request the INTERNET permission, so it cannot send data anywhere.
+- **No account, no analytics, no ads.**
+- **Clipboard history** is stored only in the app's private storage. Passwords and fields marked sensitive are not saved (on by default). You can turn history off, auto-delete it, or clear it at any time.
+- **Autocorrect and suggestions** run locally against a bundled word list and your personal dictionary.
+- **Things you trigger yourself:** *Translate* opens your browser with the selected text; *Voice typing* uses your phone's own speech recognizer (which may use its provider's servers). Neither runs unless you tap it.
+- **Backups** are files you create and store yourself. Android cloud backup is disabled for this app.
 
-Voice typing, translate and quick search hand text to other apps (the system speech recognizer or your browser) only when you tap those tools.
+Questions: open an issue at https://github.com/mkmehmood/keyboard/issues

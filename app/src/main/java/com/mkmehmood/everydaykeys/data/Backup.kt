@@ -1,10 +1,8 @@
 package com.mkmehmood.everydaykeys.data
 
 import android.content.Context
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
+import android.net.Uri
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -12,64 +10,47 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** One JSON file holding settings, snippets, personal dictionary and clipboard history. */
 object Backup {
-    suspend fun exportAll(ctx: Context, settings: Boolean = true, snippets: Boolean = true, dict: Boolean = true, clips: Boolean = true): String =
-        withContext(Dispatchers.IO) {
-            val db = Db.get(ctx)
-            val root = JSONObject().put("app", "everyday-keys").put("version", 1)
-            if (settings) {
-                val o = JSONObject()
-                ctx.dataStore.data.first().asMap().forEach { (k, v) ->
-                    o.put(k.name, JSONObject().put("t", when (v) { is Boolean -> "b"; is Float -> "f"; else -> "s" }).put("v", v))
-                }
-                root.put("settings", o)
-            }
-            if (snippets) root.put("snippets", JSONArray().also { a ->
-                db.snippets().all().forEach { a.put(JSONObject().put("title", it.title).put("shortcut", it.shortcut).put("body", it.body)) }
-            })
-            if (dict) root.put("words", JSONArray().also { a ->
-                db.words().all().forEach { a.put(JSONObject().put("w", it.word).put("c", it.count).put("p", it.personal)) }
-            })
-            if (clips) {
-                val store = ClipStore(ctx)
-                root.put("clips", JSONArray().also { a ->
-                    db.clips().all().forEach { c ->
-                        a.put(JSONObject().put("text", store.read(c)).put("pinned", c.pinned).put("at", c.createdAt))
-                    }
-                })
-            }
-            root.toString()
-        }
+    suspend fun export(ctx: Context, uri: Uri) = withContext(Dispatchers.IO) {
+        val db = AppDb.get(ctx)
+        val repo = ClipRepo(ctx)
+        val root = JSONObject().put("version", 1)
+        val s = JSONObject()
+        ctx.store.data.first().asMap().forEach { (k, v) -> s.put(k.name, v.toString()) }
+        root.put("settings", s)
+        val sn = JSONArray()
+        db.snippets().all().forEach { sn.put(JSONObject().put("title", it.title).put("body", it.body).put("shortcut", it.shortcut)) }
+        root.put("snippets", sn)
+        val w = JSONArray()
+        db.words().personalList().forEach { w.put(it.word) }
+        root.put("words", w)
+        val c = JSONArray()
+        db.clips().all().forEach { c.put(JSONObject().put("text", repo.text(it)).put("pinned", it.pinned)) }
+        root.put("clips", c)
+        ctx.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString()) }
+        Unit
+    }
 
-    suspend fun importAll(ctx: Context, json: String) = withContext(Dispatchers.IO) {
-        val root = JSONObject(json)
-        require(root.optString("app") == "everyday-keys") { "Not an Everyday Keys backup" }
-        val db = Db.get(ctx)
-        root.optJSONObject("settings")?.let { o ->
-            ctx.dataStore.edit { e ->
-                o.keys().forEach { name ->
-                    val item = o.getJSONObject(name)
-                    when (item.getString("t")) {
-                        "b" -> e[booleanPreferencesKey(name)] = item.getBoolean("v")
-                        "f" -> e[floatPreferencesKey(name)] = item.getDouble("v").toFloat()
-                        else -> e[stringPreferencesKey(name)] = item.getString("v")
-                    }
-                }
-            }
+    suspend fun import(ctx: Context, uri: Uri) = withContext(Dispatchers.IO) {
+        val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: return@withContext
+        val root = JSONObject(text)
+        val db = AppDb.get(ctx)
+        val repo = ClipRepo(ctx)
+        root.optJSONObject("settings")?.let { s ->
+            ctx.store.edit { e -> s.keys().forEach { k -> e[stringPreferencesKey(k)] = s.getString(k) } }
+            if (s.has("hideLauncher")) Launcher.apply(ctx, s.getString("hideLauncher") == "true")
         }
         root.optJSONArray("snippets")?.let { a ->
             for (i in 0 until a.length()) a.getJSONObject(i).let {
-                db.snippets().upsert(Snippet(title = it.getString("title"), shortcut = it.getString("shortcut"), body = it.getString("body")))
+                db.snippets().upsert(Snippet(title = it.getString("title"), body = it.getString("body"), shortcut = it.getString("shortcut")))
             }
         }
         root.optJSONArray("words")?.let { a ->
-            for (i in 0 until a.length()) a.getJSONObject(i).let {
-                db.words().upsert(Word(it.getString("w"), it.getInt("c"), it.getBoolean("p")))
-            }
+            for (i in 0 until a.length()) { db.words().insert(Word(a.getString(i))); Suggest.learn(a.getString(i)) }
         }
         root.optJSONArray("clips")?.let { a ->
-            val store = ClipStore(ctx)
-            for (i in 0 until a.length()) store.add(a.getJSONObject(i).getString("text"))
+            for (i in 0 until a.length()) a.getJSONObject(i).let { repo.add(it.getString("text"), it.optBoolean("pinned")) }
         }
     }
 }

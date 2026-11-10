@@ -1,23 +1,31 @@
 # Everyday Keys
 
-A privacy-first Android keyboard with an unlimited clipboard, a dedicated number pad and an icon-only interface.
+A privacy-first Android keyboard: **unlimited clipboard history**, a **full number pad**, and an **icon-only interface**. Kotlin, Jetpack Compose, Room, DataStore.
 
-## Features
-- **Letters**: QWERTY, QWERTZ, AZERTY, Urdu, Arabic, Hindi. Shift, caps lock, long-press accents, optional number row, glide typing.
-- **Number pad**: phone or calculator style, `+ − × ÷ = % /` row, type `1,250 + 340 =` to get the result, unit converter.
-- **Symbols**: two pages of punctuation, currency, math and brackets.
-- **One-handed and floating modes.**
-- **Unlimited clipboard**: history, pin, search, delete, clear all, merge items, swap last items. Big items are stored as files and pasted in 50-100 KB chunks with a progress bar. Sensitive fields are never saved. Optional biometric lock.
-- **Toolbar**: snippets with `;shortcuts`, voice typing, translate, quick search, undo/redo, cursor and edit keys, emoji with recents and search.
-- **Smart typing**: autocorrect, next-word suggestions, personal dictionary, auto-capitalization, double-space period. All local.
-- **Icon rule**: every button is a vector icon; only the emoji panel shows emoji.
-- **Settings**: Compose app with search, status card, 11 sections, live preview field, backup and restore.
+## Get the app
 
-## Install
-Every push to `main` builds the APK and publishes it under **Releases**. Download the latest `.apk`, install it, open Everyday Keys, then follow the status card (enable, then switch).
+Every push to `main` builds a signed APK and publishes it under **Releases**. Download the latest `EverydayKeys-v*.apk`, install it, open the app and follow the two steps on the status card (enable, then switch).
+
+## What works
+
+- **Layouts:** QWERTY, Urdu, Arabic, Hindi (enable in Settings, cycle with the globe key); shift / caps lock (double tap); optional number row; long-press accents; number pad (phone or calculator order, operators row, `=` evaluates the expression before the cursor); two symbol pages; one-handed mode (left / right).
+- **Clipboard:** every copy is saved; pin, search, delete, clear all, merge several items into one paste. Text over 20,000 characters is stored as a file with only a reference in the database. Pasting streams in 50–100 K chunks with a progress bar and cancel.
+- **Privacy:** password and sensitive fields are never saved; no internet permission.
+- **Toolbar:** clipboard, snippets (`;addr` style shortcuts expand on space), voice typing, translate selection, undo/redo, cursor + select all/copy/cut/paste panel, spacebar cursor drag, emoji with recents and search.
+- **Smart typing:** autocorrect (off / mild / strong), word completion, personal dictionary, auto-capitalization, double-space period. All local.
+- **Settings:** 11 sections, instant apply, per-section reset, search, status card, backup/restore to one JSON file.
+- **Access:** every button is a vector icon (only the emoji panel shows emoji); TalkBack labels on keys.
+
+Tip: long-press the number-pad key to open symbols.
+
+## Not built yet (roadmap)
+
+Glide typing, floating keyboard mode, biometric lock for clipboard history, unit converter, drag-to-reorder toolbar and languages, swap-last-items shortcut, bigram next-word prediction (suggestions are prefix completions today).
 
 ## Build
-Android Studio (Hedgehog or newer) or `gradle :app:assembleRelease` with JDK 17.
-The release build is signed with the debug key so it installs without secrets. Add your own keystore for Play Store releases.
 
-Stack: Kotlin, InputMethodService, custom canvas keys, Jetpack Compose (settings), Room, DataStore.
+Open in Android Studio (JDK 17) or run `./gradlew assembleRelease`. Release signing reads `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. In CI, add repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` for a stable signing key; without them a throwaway key is generated per build (APKs install, but you cannot update over a build signed with a different key).
+
+## Licenses
+
+MIT (see LICENSE). Uses AndroidX, Jetpack Compose, Room, DataStore, kotlinx.coroutines (Apache-2.0). Bundled English word list: first20hours/google-10000-english (derived from Google's Trillion Word Corpus).
