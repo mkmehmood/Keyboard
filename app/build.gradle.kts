@@ -15,7 +15,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = runNumber
-        versionName = "1.0.$runNumber"
+        versionName = "2.0.$runNumber"
     }
 
     buildTypes {
