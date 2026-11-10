@@ -19,14 +19,24 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
 
       - name: Build release APK
-        run: gradle :app:assembleRelease --no-daemon --stacktrace
+        run: |
+          set +e
+          gradle :app:assembleRelease --no-daemon --stacktrace > build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            grep -E "^e: |error:|What went wrong|Execution failed|Caused by|AAPT|Could not" -A2 build.log | cut -c1-300 > errors.txt
+            for part in 1 2 3; do
+              start=$(( (part-1)*3000 + 1 ))
+              chunk=$(tail -c +$start errors.txt | head -c 3000 | sed ':a;N;$!ba;s/\n/%0A/g')
+              [ -n "$chunk" ] && echo "::error title=Build errors part $part::$chunk"
+            done
+          fi
+          exit $code
 
       - name: Name the APK
         run: |
