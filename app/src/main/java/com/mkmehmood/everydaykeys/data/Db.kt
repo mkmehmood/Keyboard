@@ -37,6 +37,7 @@ interface ClipDao {
     @Update suspend fun update(c: Clip)
     @Delete suspend fun delete(c: Clip)
     @Query("SELECT * FROM clips") suspend fun all(): List<Clip>
+    @Query("SELECT * FROM clips ORDER BY createdAt DESC LIMIT 1") suspend fun latest(): Clip?
     @Query("SELECT * FROM clips WHERE pinned = 0") suspend fun unpinned(): List<Clip>
     @Query("DELETE FROM clips WHERE pinned = 0") suspend fun clearUnpinned()
     @Query("DELETE FROM clips") suspend fun clear()

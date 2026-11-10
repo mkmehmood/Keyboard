@@ -308,8 +308,10 @@ private fun Toolbar(svc: EveryDayKeysService, c: KbColors) {
 private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val alts = svc.alts
     val items = alts ?: svc.suggestions
-    if (items.isEmpty()) return
+    val pending = if (alts == null && svc.showClipChip) svc.pendingClip else null
+    if (items.isEmpty() && pending == null) return
     Row(Modifier.fillMaxWidth().height(38.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
         items.forEach { s ->
             Text(
                 s, color = c.text, fontSize = 18.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -317,6 +319,26 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
             )
         }
         if (alts != null) IconTap(R.drawable.ic_close, "Close alternates", c) { svc.alts = null }
+    }
+}
+
+/** Last copied, not-yet-pasted item. Tap to paste; the X dismisses it. */
+@Composable
+private fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip, wide: Boolean) {
+    val text = item.preview.replace(Regex("\\s+"), " ").trim()
+    Row(
+        Modifier.weight(if (wide) 1f else 1.15f).padding(horizontal = 3.dp).height(32.dp)
+            .clip(RoundedCornerShape(16.dp)).background(c.panel)
+            .clickable { svc.feedback(); svc.pasteClips(listOf(item)) }.padding(start = 10.dp, end = if (wide) 2.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(R.drawable.ic_clipboard), "Paste last copied", tint = c.accent, modifier = Modifier.size(16.dp))
+        Text(text, color = c.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(horizontal = 6.dp))
+        if (wide) {
+            if (item.length > 200) Text("%,d chars".format(item.length), color = c.sub, fontSize = 11.sp)
+            IconTap(R.drawable.ic_close, "Dismiss", c) { svc.pendingClip = null }
+        }
     }
 }
 

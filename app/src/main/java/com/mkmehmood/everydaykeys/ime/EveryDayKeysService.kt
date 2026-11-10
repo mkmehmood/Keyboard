@@ -67,6 +67,10 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     var shift by mutableStateOf(Shift.OFF)
     var langIdx by mutableStateOf(0)
     var suggestions by mutableStateOf(listOf<String>())
+    /** Most recently copied item that has not been pasted yet; shown in the suggestion bar. */
+    var pendingClip by mutableStateOf<Clip?>(null)
+    val showClipChip: Boolean get() = pendingClip != null && !sensitive
+    private var onlineJob: kotlinx.coroutines.Job? = null
     var alts by mutableStateOf<List<String>?>(null)
     var progress by mutableStateOf<Float?>(null)
     var searching by mutableStateOf(false)
@@ -91,7 +95,10 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
             if (clip.itemCount == 0) return
             val t = clip.getItemAt(0)?.coerceToText(this@EveryDayKeysService)?.toString() ?: return
-            scope.launch { clips.add(t) }
+            scope.launch {
+                clips.add(t)
+                pendingClip = withContext(Dispatchers.IO) { AppDb.get(this@EveryDayKeysService).clips().latest() }
+            }
         }
     }
 
@@ -268,10 +275,21 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     fun refreshSuggestions() {
+        onlineJob?.cancel()
         if (!smart || !prefs.bool("suggestions") || lang != "en") { suggestions = emptyList(); return }
         val b = currentInputConnection?.getTextBeforeCursor(32, 0)?.toString().orEmpty()
         val w = b.takeLastWhile { it.isLetter() || it == '\'' }
-        suggestions = if (w.isEmpty()) emptyList() else Suggest.complete(w)
+        if (w.isEmpty()) { suggestions = emptyList(); return }
+        val local = Suggest.complete(w, 6)
+        suggestions = local.take(3)
+        if (w.length >= 2 && prefs.bool("onlineSuggestions")) {
+            onlineJob = scope.launch {
+                kotlinx.coroutines.delay(120)
+                val online = OnlineSuggest.fetch(w).map { Suggest.matchCaseOf(w, it) }.filter { it.lowercase() != w.lowercase() }
+                if (online.isEmpty()) return@launch
+                suggestions = (local.take(2) + online + local.drop(2)).distinctBy { it.lowercase() }.take(3)
+            }
+        }
     }
 
     fun applySuggestion(s: String) {
@@ -298,7 +316,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     /** Paste the newest history item through the chunked path, so size never matters. */
     fun paste() {
         scope.launch {
-            val latest = withContext(Dispatchers.IO) { AppDb.get(this@EveryDayKeysService).clips().all().maxByOrNull { it.createdAt } }
+            val latest = withContext(Dispatchers.IO) { AppDb.get(this@EveryDayKeysService).clips().latest() }
             if (latest != null) pasteClips(listOf(latest)) else currentInputConnection?.performContextMenuAction(android.R.id.paste)
         }
     }
@@ -315,6 +333,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     fun pasteClips(list: List<Clip>) {
         if (list.isEmpty()) return
+        if (list.any { it.id == pendingClip?.id }) pendingClip = null
         closePanel()
         pasteJob?.cancel()
         val total = list.sumOf { it.length } + list.size - 1

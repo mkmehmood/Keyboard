@@ -71,10 +71,11 @@ object Defs {
         Section("smart", "Smart typing", "Autocorrect, suggestions, on-device", R.drawable.ic_sparkle, listOf(
             Choice("autocorrect", "Autocorrect", listOf("off" to "Off", "mild" to "Mild", "strong" to "Strong"), "mild"),
             Toggle("suggestions", "Word suggestions", true),
+            Toggle("onlineSuggestions", "Live online suggestions", false),
             Toggle("autoCap", "Auto-capitalization", true),
             Toggle("doubleSpace", "Double-space for a period", true),
             Action("dictionary", "Personal dictionary", "Add or remove your own words"),
-            Action("localNote", "All processing is local", "Nothing you type is sent anywhere")
+            Action("localNote", "Local by default", "Online suggestions are optional and send only the partial word you are typing")
         )),
         Section("appearance", "Appearance", "Theme, key height, font size", R.drawable.ic_sun, listOf(
             Choice("theme", "Theme", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"), "system"),

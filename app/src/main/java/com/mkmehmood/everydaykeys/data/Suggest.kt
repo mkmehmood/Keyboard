@@ -1,17 +1,16 @@
 package com.mkmehmood.everydaykeys.data
 
 import android.content.Context
-import java.util.concurrent.ConcurrentHashMap
 
 /** Tiny on-device dictionary: frequency-ordered English words plus the user's own words. */
 object Suggest {
-    private val dict = ConcurrentHashMap<String, Int>()
+    private val dict = java.util.concurrent.ConcurrentSkipListMap<String, Int>()
     @Volatile private var loaded = false
 
     fun load(ctx: Context) {
         if (loaded) return
         ctx.assets.open("words_en.txt").bufferedReader().useLines { lines ->
-            lines.forEachIndexed { i, l -> val w = l.trim().lowercase(); if (w.isNotEmpty()) dict.putIfAbsent(w, 20_000 - i) }
+            lines.forEachIndexed { i, l -> val w = l.trim().lowercase(); if (w.isNotEmpty()) dict.putIfAbsent(w, 200_000 - i) }
         }
         loaded = true
     }
@@ -22,11 +21,15 @@ object Suggest {
     private fun matchCase(src: String, w: String) =
         if (src.isNotEmpty() && src[0].isUpperCase()) w.replaceFirstChar { it.uppercase() } else w
 
-    fun complete(prefix: String): List<String> {
+    /** Prefix lookup over the sorted dictionary, best [n] by frequency. */
+    fun complete(prefix: String, n: Int = 3): List<String> {
         val p = prefix.lowercase()
-        return dict.entries.filter { it.key.startsWith(p) && it.key != p }
-            .sortedByDescending { it.value }.take(3).map { matchCase(prefix, it.key) }
+        if (p.isEmpty()) return emptyList()
+        return dict.subMap(p, p + '\uffff').entries.asSequence().filter { it.key != p }
+            .sortedByDescending { it.value }.take(n).map { matchCase(prefix, it.key) }.toList()
     }
+
+    fun matchCaseOf(src: String, w: String) = matchCase(src, w)
 
     /** Returns a replacement for [word], or null to leave it alone. level 1 = mild, 2 = strong. */
     fun correct(word: String, level: Int): String? {
