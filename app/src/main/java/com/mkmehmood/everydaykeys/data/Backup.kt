@@ -39,6 +39,7 @@ object Backup {
         val repo = ClipRepo(ctx)
         root.optJSONObject("settings")?.let { s ->
             ctx.store.edit { e -> s.keys().forEach { k -> e[stringPreferencesKey(k)] = s.getString(k) } }
+            if (s.has("hideLauncher")) Launcher.apply(ctx, s.getString("hideLauncher") == "true")
         }
         root.optJSONArray("snippets")?.let { a ->
             for (i in 0 until a.length()) a.getJSONObject(i).let {

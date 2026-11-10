@@ -23,9 +23,11 @@ object SettingsRepo {
     fun flow(ctx: Context): Flow<Prefs> = ctx.store.data.map { Prefs(it) }
     suspend fun set(ctx: Context, key: String, value: String) {
         ctx.store.edit { it[stringPreferencesKey(key)] = value }
+        if (key == "hideLauncher") Launcher.apply(ctx, value == "true")
     }
     suspend fun reset(ctx: Context, keys: List<String>) {
         ctx.store.edit { e -> keys.forEach { e.remove(stringPreferencesKey(it)) } }
+        if ("hideLauncher" in keys) Launcher.apply(ctx, false)
     }
 }
 
@@ -95,6 +97,7 @@ object Defs {
             Multi("toolbarItems", "Tools (shown in the order you enable them)", tools, "clip,snip,voice,translate,undo,redo,cursor,settings")
         )),
         Section("privacy", "Privacy and data", "Nothing leaves your phone", R.drawable.ic_lock, listOf(
+            Toggle("hideLauncher", "Hide app icon from the launcher", false),
             Action("privacyNote", "No keystrokes leave your device", "No account. No analytics. The keyboard has no internet permission."),
             Action("resetDict", "Reset learned dictionary", "Removes your personal words"),
             Action("wipeAll", "Delete all app data", "Clipboard, snippets, dictionary, settings")

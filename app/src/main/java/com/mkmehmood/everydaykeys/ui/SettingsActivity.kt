@@ -43,6 +43,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mkmehmood.everydaykeys.R
 import com.mkmehmood.everydaykeys.data.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 class SettingsActivity : ComponentActivity() {
@@ -97,6 +98,18 @@ private fun imeStatus(ctx: Context): Pair<Boolean, Boolean> {
     return enabled to sel
 }
 
+/** Writes a setting. Hiding the launcher icon is refused until the keyboard is enabled, so the user can never lock themselves out. */
+private fun commitSetting(ctx: Context, scope: CoroutineScope, k: String, v: String) {
+    if (k == "hideLauncher" && v == "true") {
+        if (!imeStatus(ctx).first) {
+            Toast.makeText(ctx, "Enable Everyday Keys in Android settings first, so you can still reach these settings.", Toast.LENGTH_LONG).show()
+            return
+        }
+        Toast.makeText(ctx, "Icon hidden. Open settings from the keyboard's gear icon or Android's keyboard settings.", Toast.LENGTH_LONG).show()
+    }
+    scope.launch { SettingsRepo.set(ctx, k, v) }
+}
+
 // ---------------------------------------------------------------- home
 
 @Composable
@@ -142,7 +155,7 @@ fun HomeScreen(nav: NavController) {
                 items(hits) { pair ->
                     Column {
                         Text(pair.first.title, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                        ItemRow(pair.second, prefs, { k, v -> scope.launch { SettingsRepo.set(ctx, k, v) } }, ctx) {}
+                        ItemRow(pair.second, prefs, { k, v -> commitSetting(ctx, scope, k, v) }, ctx) {}
                     }
                 }
             }
@@ -268,7 +281,7 @@ fun SectionScreen(id: String, nav: NavController) {
             "wipeAll" -> confirm = Confirm("Delete clipboard, snippets, dictionary and settings? This cannot be undone.") {
                 scope.launch {
                     ClipRepo(ctx).clearAll(); AppDb.get(ctx).snippets().clear(); AppDb.get(ctx).words().clear()
-                    ctx.store.edit { it.clear() }; toast("All data deleted")
+                    ctx.store.edit { it.clear() }; Launcher.apply(ctx, false); toast("All data deleted")
                 }
             }
             "export" -> exportL.launch("everyday-keys-backup.json")
@@ -283,7 +296,7 @@ fun SectionScreen(id: String, nav: NavController) {
             s.items.forEach { item ->
                 val shown = if (item is Action && item.id == "clearClips")
                     Action(item.id, item.title, "Large items use ${Formatter.formatFileSize(ctx, usage)}. Pinned items are kept.") else item
-                ItemRow(shown, prefs, { k, v -> scope.launch { SettingsRepo.set(ctx, k, v) } }, ctx, ::onAction)
+                ItemRow(shown, prefs, { k, v -> commitSetting(ctx, scope, k, v) }, ctx, ::onAction)
                 HorizontalDivider()
             }
             val keys = s.items.filter { it !is Action }.map { it.key }
