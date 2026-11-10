@@ -2,6 +2,12 @@ package com.mkmehmood.everydaykeys.ime
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.ContentScale
+import com.mkmehmood.everydaykeys.data.KbBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -10,9 +16,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,7 +25,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -33,6 +37,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.font.FontFamily
+import com.mkmehmood.everydaykeys.data.Prefs
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -56,12 +64,28 @@ import com.mkmehmood.everydaykeys.data.AppDb
 import com.mkmehmood.everydaykeys.data.Calc
 import com.mkmehmood.everydaykeys.data.Clip
 import com.mkmehmood.everydaykeys.data.UnitDef
+import com.mkmehmood.everydaykeys.data.Translator
 import com.mkmehmood.everydaykeys.data.Units
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Height of the suggestion strip. It is always reserved so the keyboard does not jump while typing. */
 private val StripH = 48.dp
+
+/** Key look chosen in settings: corner shape, font and weight. */
+internal fun keyShape(p: Prefs): Shape = when (p.str("keyShape")) {
+    "square" -> RectangleShape
+    "slight" -> RoundedCornerShape(4.dp)
+    "soft" -> RoundedCornerShape(14.dp)
+    "round" -> RoundedCornerShape(50)
+    else -> RoundedCornerShape(8.dp)
+}
+internal fun keyFont(p: Prefs): FontFamily = when (p.str("keyFont")) {
+    "serif" -> FontFamily.Serif; "mono" -> FontFamily.Monospace; "cursive" -> FontFamily.Cursive; else -> FontFamily.Default
+}
+internal fun keyWeight(p: Prefs): FontWeight = when (p.str("keyWeight")) { "normal" -> FontWeight.Normal; "bold" -> FontWeight.Bold; else -> FontWeight.Medium }
+/** Keyboard size as a fraction, 0.6 to 1.0. */
+internal fun keyScale(p: Prefs): Float = (p.int("keyScale").coerceIn(60, 100)) / 100f
 
 class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color) {
     companion object {
@@ -79,14 +103,35 @@ class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color
 fun KeyboardRoot(svc: EveryDayKeysService) {
     val p = svc.prefs
     val dark = when (p.str("theme")) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
-    val c = remember(dark, p.str("accent")) { KbColors.of(dark, p.str("accent")) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val base = remember(dark, p.str("accent")) { KbColors.of(dark, p.str("accent")) }
+    val bmp = remember(p.str("bgOn"), p.str("bgVersion")) { if (p.bool("bgOn")) KbBackground.load(ctx) else null }
+    val c = if (bmp == null) base else {
+        val a = p.int("bgKeyAlpha") / 100f
+        KbColors(Color.Transparent, base.key.copy(alpha = a), base.keyAlt.copy(alpha = a), base.text, base.sub, base.accent, base.panel.copy(alpha = 0.92f))
+    }
     val oh = p.str("oneHanded")
     val align = when (oh) { "left" -> Alignment.BottomStart; "right" -> Alignment.BottomEnd; else -> Alignment.BottomCenter }
-    val h = p.int("keyHeight").dp
-    Box(Modifier.fillMaxWidth().background(c.bg), contentAlignment = align) {
+    val h = 52.dp
+    Box(Modifier.fillMaxWidth().background(base.bg), contentAlignment = align) {
+        if (bmp != null) {
+            val blurDp = p.int("bgBlur")
+            Box(Modifier.matchParentSize().clipToBounds()) {
+                Image(
+                    bmp, null, Modifier.matchParentSize().then(if (blurDp > 0) Modifier.blur(blurDp.dp, BlurredEdgeTreatment.Unbounded) else Modifier),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = p.int("bgDim") / 100f)))
+        }
         Column(Modifier.fillMaxWidth(if (oh == "off") 1f else 0.78f).padding(horizontal = 4.dp, vertical = 4.dp)) {
             if (svc.progress != null) ProgressCard(svc, c)
-            BarRow(svc, c)
+            // toolbar and suggestions sit directly on the keyboard background, with no panel behind them
+            Column(Modifier.fillMaxWidth()) {
+                if (svc.panel == Panel.NONE && svc.mode != Mode.NUMPAD) Strip(svc, c)
+                // the number pad has no suggestions, only the tool icons
+                else if (p.bool("showToolbar")) Toolbar(svc, c)
+            }
             when (svc.panel) {
                 Panel.NONE -> Keys(svc, c, h)
                 Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
@@ -121,15 +166,22 @@ fun Key(
     var pressed by remember { mutableStateOf(false) }
     val p = svc.prefs
     val base = when { tone == 2 || active -> c.accent; tone == 1 -> c.keyAlt; else -> c.key }
-    val fg = if (tone == 2 || active) Color.White else c.text
-    val shape = RectangleShape
-    var m = modifier.clip(shape).background(if (pressed) base.copy(alpha = 0.65f) else base)
-        .drawBehind {
-            // 1dp lower edge gives each key a slight raised look.
-            val e = 1.dp.toPx()
-            drawRect(Color.Black.copy(alpha = 0.2f), topLeft = Offset(0f, size.height - e), size = Size(size.width, e))
-        }
-    if (p.bool("borders")) m = m.border(1.dp, c.sub.copy(alpha = 0.5f), shape)
+    val outline = p.str("keyStyle") == "outline"
+    val fg = if ((tone == 2 || active) && !outline) Color.White else c.text
+    val shape = keyShape(p)
+    val fill = when {
+        outline -> base.copy(alpha = if (pressed) 0.45f else 0.14f)
+        pressed -> base.copy(alpha = 0.65f)
+        else -> base
+    }
+    var m = modifier.clip(shape).background(fill)
+    if (p.str("keyStyle") == "raised") m = m.drawBehind {
+        // 1dp lower edge gives each key a slight raised look.
+        val e = 1.dp.toPx()
+        drawRect(Color.Black.copy(alpha = 0.2f), topLeft = Offset(0f, size.height - e), size = Size(size.width, e))
+    }
+    if (outline) m = m.border(1.5.dp, if (tone == 2 || active) c.accent else c.sub.copy(alpha = 0.7f), shape)
+    else if (p.bool("borders")) m = m.border(1.dp, c.sub.copy(alpha = 0.5f), shape)
     m = m
         .semantics { contentDescription = desc; role = Role.Button; onClick(label = desc) { tap(); true } }
         .pointerInput(Unit) {
@@ -163,33 +215,35 @@ fun Key(
         }
     Box(m, contentAlignment = Alignment.Center) {
         if (icon != null) Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(22.dp))
-        else if (label != null) Text(label, color = fg, fontSize = p.int("fontSize").sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        else if (label != null) Text(label, color = fg, fontSize = p.int("fontSize").sp, fontWeight = keyWeight(p), fontFamily = keyFont(p), maxLines = 1)
         if (pressed && tone == 0 && label != null && label.length <= 2 && label.isNotBlank() && p.bool("keyPreview")) {
             val lift = with(LocalDensity.current) { 70.dp.roundToPx() }
-            val bubble = RectangleShape
+            val bubble = RoundedCornerShape(12.dp)
             Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -lift)) {
                 Box(
                     Modifier.size(52.dp, 64.dp).clip(bubble).background(c.key).border(1.dp, c.sub.copy(alpha = 0.4f), bubble),
                     contentAlignment = Alignment.Center
-                ) { Text(label, color = c.text, fontSize = 30.sp, fontWeight = FontWeight.Medium) }
+                ) { Text(label, color = c.text, fontSize = 30.sp, fontWeight = keyWeight(p), fontFamily = keyFont(p)) }
             }
         }
     }
 }
 
 @Composable
-private fun IconTap(icon: Int, desc: String, c: KbColors, tint: Color = c.text, onClick: () -> Unit) {
+private fun IconTap(icon: Int, desc: String, c: KbColors, tint: Color = c.text, modifier: Modifier = Modifier.size(48.dp), onClick: () -> Unit) {
     Box(
-        Modifier.size(48.dp).clip(RectangleShape).clickable(onClickLabel = desc, role = Role.Button) { onClick() },
+        modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClickLabel = desc, role = Role.Button) { onClick() },
         contentAlignment = Alignment.Center
     ) { Icon(painterResource(icon), desc, tint = tint, modifier = Modifier.size(22.dp)) }
 }
 
 @Composable
 private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) {
-    val shape = RectangleShape
+    val shape = keyShape(svc.prefs)
+    val outline = svc.prefs.str("keyStyle") == "outline"
     Box(
-        modifier.clip(shape).background(c.key)
+        modifier.clip(shape).background(if (outline) c.key.copy(alpha = 0.14f) else c.key)
+            .then(if (outline) Modifier.border(1.5.dp, c.sub.copy(alpha = 0.7f), shape) else Modifier)
             .semantics { contentDescription = "Space. Swipe left or right to move the cursor."; role = Role.Button; onClick { svc.onChar(" "); true } }
             .pointerInput(Unit) { detectTapGestures(onPress = { svc.feedback() }, onTap = { svc.onChar(" ") }) }
             .pointerInput(Unit) {
@@ -207,81 +261,100 @@ private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) 
 
 // ---------------------------------------------------------------- layouts
 
+/** Largest key edge. Keys are always perfect squares; on wide screens they stop growing and the rows are centred. */
+private val MaxKey = 64.dp
+private val KeyGap = 5.dp
+
 @Composable
 private fun LettersView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val rows = Layouts.letters[svc.lang] ?: Layouts.letters.getValue("en")
     val up = svc.shift != Shift.OFF
-    val gap = Arrangement.spacedBy(5.dp)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (svc.prefs.bool("numberRow")) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            "1234567890".forEach { d ->
-                val s = d.toString()
-                Key(svc, c, Modifier.weight(1f).height(h * 0.85f), s, label = s) { svc.onChar(s) }
-            }
-        }
-        rows.forEachIndexed { i, row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                if (i == 1 && row.size < 10) Spacer(Modifier.weight(0.5f))
-                if (i == 2) Key(svc, c, Modifier.weight(1.4f).height(h), "Shift", icon = if (svc.shift == Shift.LOCK) R.drawable.ic_caps else R.drawable.ic_shift,
-                    tone = 1, active = svc.shift != Shift.OFF) { svc.onShift() }
-                row.forEach { k ->
-                    val label = if (up) k.uppercase() else k
-                    val a = Layouts.accents[k]
-                    val onLong: (() -> Unit)? = if (svc.prefs.bool("accentPopup") && a != null) {
-                        { svc.alts = a.map { if (up) it.uppercase() else it } }
-                    } else null
-                    Key(svc, c, Modifier.weight(1f).height(h), label, label = label, onLong = onLong) { svc.onChar(k) }
+    val gap = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // ten key columns; every key is `unit` tall and spans a multiple of `unit` wide, so letter keys are exact squares
+        val unit = minOf((maxWidth - KeyGap * 9) / 10, MaxKey) * keyScale(svc.prefs)
+        fun w(span: Float) = unit * span + KeyGap * (span - 1f)
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KeyGap), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (svc.prefs.bool("numberRow")) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                "1234567890".forEach { d ->
+                    val s = d.toString()
+                    Key(svc, c, Modifier.size(w(1f), unit), s, label = s) { svc.onChar(s) }
                 }
-                if (i == 2) Key(svc, c, Modifier.weight(1.4f).height(h), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
-                if (i == 1 && row.size < 10) Spacer(Modifier.weight(0.5f))
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            Key(svc, c, Modifier.weight(1.2f).height(h), "Number pad. Long press for symbols.", icon = R.drawable.ic_numpad, tone = 1,
-                onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.NUMPAD }
-            if (svc.prefs.bool("langKey")) Key(svc, c, Modifier.weight(1f).height(h), "Switch language", icon = R.drawable.ic_globe, tone = 1) { svc.nextLang() }
-            Key(svc, c, Modifier.weight(1f).height(h), "Emoji", icon = R.drawable.ic_emoji, tone = 1) { svc.openPanel(Panel.EMOJI) }
-            SpaceKey(svc, c, Modifier.weight(3.4f).height(h))
-            Key(svc, c, Modifier.weight(0.8f).height(h), "Comma", label = ",", tone = 1) { svc.onChar(",") }
-            Key(svc, c, Modifier.weight(0.8f).height(h), "Period. Long press for punctuation.", label = ".", tone = 1,
-                onLong = { svc.alts = Layouts.periodAlts }) { svc.onChar(".") }
-            Key(svc, c, Modifier.weight(1.3f).height(h), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
+            rows.forEachIndexed { i, row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                    if (i == 1 && row.size < 10) Spacer(Modifier.size(w(0.5f), unit))
+                    if (i == 2) Key(svc, c, Modifier.size(w(1.5f), unit), "Shift", icon = if (svc.shift == Shift.LOCK) R.drawable.ic_caps else R.drawable.ic_shift,
+                        tone = 1, active = svc.shift != Shift.OFF) { svc.onShift() }
+                    row.forEach { k ->
+                        val label = if (up) k.uppercase() else k
+                        val a = Layouts.accents[k]
+                        val onLong: (() -> Unit)? = if (svc.prefs.bool("accentPopup") && a != null) {
+                            { svc.alts = a.map { if (up) it.uppercase() else it } }
+                        } else null
+                        Key(svc, c, Modifier.size(w(1f), unit), label, label = label, onLong = onLong) { svc.onChar(k) }
+                    }
+                    if (i == 2) Key(svc, c, Modifier.size(w(1.5f), unit), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                    if (i == 1 && row.size < 10) Spacer(Modifier.size(w(0.5f), unit))
+                }
+            }
+            val lang = svc.prefs.bool("langKey")
+            val space = 10f - (1.2f + 1f + 0.8f + 0.8f + 1.3f) - (if (lang) 1f else 0f)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                Key(svc, c, Modifier.size(w(1.2f), unit), "Number pad. Long press for symbols.", icon = R.drawable.ic_numpad, tone = 1,
+                    onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.NUMPAD }
+                if (lang) Key(svc, c, Modifier.size(w(1f), unit), "Switch language", icon = R.drawable.ic_globe, tone = 1) { svc.nextLang() }
+                Key(svc, c, Modifier.size(w(1f), unit), "Comma", label = ",", tone = 1) { svc.onChar(",") }
+                SpaceKey(svc, c, Modifier.size(w(space), unit))
+                Key(svc, c, Modifier.size(w(0.8f), unit), "Emoji", icon = R.drawable.ic_emoji, tone = 1) { svc.openPanel(Panel.EMOJI) }
+                Key(svc, c, Modifier.size(w(0.8f), unit), "Period. Long press for punctuation.", label = ".", tone = 1,
+                    onLong = { svc.alts = Layouts.periodAlts }) { svc.onChar(".") }
+                Key(svc, c, Modifier.size(w(1.3f), unit), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
+            }
         }
     }
 }
 
 @Composable
 private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
-    val gap = Arrangement.spacedBy(5.dp)
-    val calc = svc.prefs.str("padStyle") == "calc"
-    val digitRows = if (calc) listOf("789", "456", "123") else listOf("123", "456", "789")
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (svc.prefs.bool("mathRow")) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            Layouts.ops.forEach { (label, commit) ->
-                Key(svc, c, Modifier.weight(1f).height(h * 0.8f), label, label = label, tone = 1) {
-                    if (commit == "=") svc.onEquals() else svc.commitText(commit)
+    val sc = keyScale(svc.prefs)
+    val g = KeyGap
+    val kh = 54.dp * sc
+    val gap = Arrangement.spacedBy(g)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // three columns: operators and ABC on the left, a large 3x3 digit block with a bottom row in the middle, %, space, backspace and enter on the right
+        Row(Modifier.fillMaxWidth(sc).align(Alignment.Center), horizontalArrangement = gap) {
+            Column(Modifier.weight(0.62f), verticalArrangement = gap) {
+                val opH = (kh * 3 + g * 2 - g * 3) / 4
+                listOf("+", "-", "*", "/").forEach { o ->
+                    Key(svc, c, Modifier.fillMaxWidth().height(opH), o, label = o, tone = 1) { svc.commitText(o) }
                 }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Back to letters. Long press for symbols.", label = "ABC", tone = 1,
+                    onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.LETTERS }
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                digitRows.forEach { r ->
+            Column(Modifier.weight(3f), verticalArrangement = gap) {
+                listOf("123", "456", "789").forEach { r ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                        r.forEach { d -> val s = d.toString(); Key(svc, c, Modifier.weight(1f).height(h), s, label = s) { svc.onChar(s) } }
+                        r.forEach { d -> val k = d.toString(); Key(svc, c, Modifier.weight(1f).height(kh), k, label = k) { svc.onChar(k) } }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    Key(svc, c, Modifier.weight(1f).height(h), "Back to letters. Long press for symbols.", icon = R.drawable.ic_keyboard, tone = 1,
-                        onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.LETTERS }
-                    Key(svc, c, Modifier.weight(1f).height(h), "0", label = "0") { svc.onChar("0") }
-                    Key(svc, c, Modifier.weight(1f).height(h), "Decimal point", label = ".") { svc.onChar(".") }
+                    Row(Modifier.weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Comma", label = ",", tone = 1) { svc.onChar(",") }
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
+                    }
+                    Key(svc, c, Modifier.weight(1f).height(kh), "0", label = "0") { svc.onChar("0") }
+                    Row(Modifier.weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Equals", label = "=", tone = 1) { svc.onEquals() }
+                        Key(svc, c, Modifier.weight(1f).height(kh), "Decimal point", label = ".", tone = 1) { svc.onChar(".") }
+                    }
                 }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Key(svc, c, Modifier.fillMaxWidth().height(h), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
-                Key(svc, c, Modifier.fillMaxWidth().height(h), "Comma", label = ",", tone = 1) { svc.onChar(",") }
-                Key(svc, c, Modifier.fillMaxWidth().height(h), "Space", icon = R.drawable.ic_space, tone = 1) { svc.onChar(" ") }
-                Key(svc, c, Modifier.fillMaxWidth().height(h), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
+            Column(Modifier.weight(0.62f), verticalArrangement = gap) {
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Percent", label = "%", tone = 1) { svc.commitText("%") }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Space", icon = R.drawable.ic_space, tone = 1) { svc.onChar(" ") }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
             }
         }
     }
@@ -289,25 +362,29 @@ private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 
 @Composable
 private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
-    val gap = Arrangement.spacedBy(5.dp)
     val symModes = listOf(Mode.SYM1, Mode.SYM2, Mode.SYM3, Mode.SYM4)
     val page = symModes.indexOf(svc.mode).coerceAtLeast(0)
     val rows = Layouts.symPages[page]
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        rows.forEachIndexed { i, row ->
+    val gap = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val unit = minOf((maxWidth - KeyGap * 9) / 10, MaxKey) * keyScale(svc.prefs)
+        fun w(span: Float) = unit * span + KeyGap * (span - 1f)
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KeyGap), horizontalAlignment = Alignment.CenterHorizontally) {
+            rows.forEachIndexed { i, row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                    row.forEach { k -> Key(svc, c, Modifier.size(w(1f), unit), k, label = k) { svc.typeSymbol(k) } }
+                    if (i == 2) Key(svc, c, Modifier.size(w(10f - row.size), unit), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                row.forEach { k -> Key(svc, c, Modifier.weight(1f).height(h), k, label = k) { svc.onChar(k) } }
-                if (i == 2) Key(svc, c, Modifier.weight(1.3f).height(h), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                Key(svc, c, Modifier.size(w(1.2f), unit), "Back to letters", icon = R.drawable.ic_keyboard, tone = 1) { svc.mode = Mode.LETTERS }
+                Key(svc, c, Modifier.size(w(1.2f), unit), "Next symbol page (${page + 1} of ${symModes.size})", icon = R.drawable.ic_swap, tone = 1) {
+                    svc.mode = symModes[(page + 1) % symModes.size]
+                }
+                Key(svc, c, Modifier.size(w(1.2f), unit), "Number pad", icon = R.drawable.ic_numpad, tone = 1) { svc.mode = Mode.NUMPAD }
+                SpaceKey(svc, c, Modifier.size(w(5.1f), unit))
+                Key(svc, c, Modifier.size(w(1.3f), unit), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            Key(svc, c, Modifier.weight(1.2f).height(h), "Back to letters", icon = R.drawable.ic_keyboard, tone = 1) { svc.mode = Mode.LETTERS }
-            Key(svc, c, Modifier.weight(1.2f).height(h), "Next symbol page (${page + 1} of ${symModes.size})", icon = R.drawable.ic_swap, tone = 1) {
-                svc.mode = symModes[(page + 1) % symModes.size]
-            }
-            Key(svc, c, Modifier.weight(1.2f).height(h), "Number pad", icon = R.drawable.ic_numpad, tone = 1) { svc.mode = Mode.NUMPAD }
-            SpaceKey(svc, c, Modifier.weight(3f).height(h))
-            Key(svc, c, Modifier.weight(1.3f).height(h), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
         }
     }
 }
@@ -329,40 +406,34 @@ private fun tool(id: String): Tool? = when (id) {
     else -> null
 }
 
-/**
- * The single bar above the keys. The toolbox icon at the left opens the tools in place of the suggestions
- * and collapses them again. While a panel (clipboard, emoji and so on) is open the tools stay visible,
- * and the toolbox icon closes the panel.
- */
+/** Tool icons only, used while a panel (clipboard, emoji...) is open and the suggestion strip is hidden. */
 @Composable
-private fun BarRow(svc: EveryDayKeysService, c: KbColors) {
-    val hasTools = svc.prefs.bool("showToolbar")
-    val inPanel = svc.panel != Panel.NONE
-    if (!hasTools && inPanel) return
-    val busy = svc.trans != null || svc.alts != null
-    val showTools = hasTools && (inPanel || (svc.toolbarOpen && !busy))
+private fun Toolbar(svc: EveryDayKeysService, c: KbColors) {
     Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
-        if (hasTools) {
-            val open = svc.toolbarOpen || inPanel
-            IconTap(R.drawable.ic_toolbox, if (open) "Collapse toolbar" else "Open toolbar", c, if (open) c.accent else c.text) {
-                svc.feedback()
-                if (inPanel) { svc.closePanel(); svc.toolbarOpen = false } else svc.toolbarOpen = !svc.toolbarOpen
-            }
-        }
-        Box(Modifier.weight(1f).fillMaxHeight()) {
-            if (showTools) ToolRow(svc, c) else Strip(svc, c)
-        }
+        ToolboxToggle(svc, c, open = true)
+        ToolIcons(svc, c)
     }
 }
 
 @Composable
-private fun ToolRow(svc: EveryDayKeysService, c: KbColors) {
-    val ids = svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
-    Row(Modifier.fillMaxSize().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-        ids.forEach { id -> tool(id)?.let { t -> IconTap(t.icon, t.desc, c, c.text) { svc.feedback(); t.run(svc) } } }
+private fun ToolboxToggle(svc: EveryDayKeysService, c: KbColors, open: Boolean) {
+    IconTap(R.drawable.ic_toolbox, if (open) "Collapse toolbar" else "Open toolbar", c, if (open) c.accent else c.text) {
+        svc.feedback(); svc.toolsOpen = !open
     }
 }
 
+@Composable
+private fun RowScope.ToolIcons(svc: EveryDayKeysService, c: KbColors) {
+    val ids = svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
+    Row(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+        ids.forEach { id -> tool(id)?.let { t -> IconTap(t.icon, t.desc, c, c.text, Modifier.weight(1f)) { svc.feedback(); t.run(svc) } } }
+    }
+}
+
+/**
+ * One row for both the toolbar and the suggestions. The toolbox icon at the left opens or collapses the tools.
+ * The tools also open by themselves whenever there are no suggestions to show.
+ */
 @Composable
 private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val tr = svc.trans
@@ -370,13 +441,18 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val alts = svc.alts
     val items = alts ?: svc.suggestions
     val pending = if (alts == null && svc.showClipChip) svc.pendingClip else null
-    if (items.isEmpty() && pending == null) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
+    val hasToolbar = svc.prefs.bool("showToolbar")
+    val noWords = items.isEmpty() && pending == null
+    val showTools = hasToolbar && alts == null && (svc.toolsOpen || noWords)
+    if (!hasToolbar && noWords) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
     Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
+        if (hasToolbar) ToolboxToggle(svc, c, open = showTools)
+        if (showTools) { ToolIcons(svc, c); return@Row }
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
         items.forEachIndexed { i, s ->
             if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.sub.copy(alpha = 0.4f)))
             Text(
-                s, color = c.text, fontSize = 18.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                s, color = c.text, fontSize = 18.sp, fontWeight = keyWeight(svc.prefs), fontFamily = keyFont(svc.prefs), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) }.padding(vertical = 8.dp)
             )
         }
@@ -386,12 +462,17 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayKeysService.Trans) {
-    Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 38.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(R.drawable.ic_translate), null, tint = c.accent, modifier = Modifier.padding(horizontal = 10.dp).size(20.dp))
         val ok = tr.result != null
         Text(
-            tr.result ?: tr.message.orEmpty(), color = if (ok) c.text else c.sub, fontSize = if (ok) 18.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            tr.result ?: tr.message.orEmpty(), color = if (ok) c.text else c.sub, fontSize = if (ok) 17.sp else 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).then(if (ok) Modifier.clickable { svc.feedback(); svc.applyTranslation() } else Modifier).padding(vertical = 8.dp)
+        )
+        if (tr.target.isNotBlank()) Text(
+            "→ " + Translator.nameOf(tr.target), color = c.accent, fontSize = 13.sp, maxLines = 1,
+            modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(12.dp)).background(c.panel)
+                .clickable { svc.feedback(); svc.nextTranslateTarget() }.padding(horizontal = 10.dp, vertical = 6.dp)
         )
         IconTap(R.drawable.ic_close, "Dismiss translation", c) { svc.dismissTranslation() }
     }
@@ -403,7 +484,7 @@ private fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip,
     val text = item.preview.replace(Regex("\\s+"), " ").trim()
     Row(
         Modifier.weight(if (wide) 1f else 1.15f).padding(horizontal = 3.dp).height(32.dp)
-            .clip(RectangleShape).background(c.panel)
+            .clip(RoundedCornerShape(16.dp)).background(c.panel)
             .clickable { svc.feedback(); svc.pasteClips(listOf(item)) }.padding(start = 10.dp, end = if (wide) 2.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -420,7 +501,7 @@ private fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip,
 @Composable
 private fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
     val pr = svc.progress ?: 0f
-    Column(Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(RectangleShape).background(c.panel).padding(10.dp)) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(RoundedCornerShape(12.dp)).background(c.panel).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(painterResource(R.drawable.ic_clipboard), null, tint = c.accent, modifier = Modifier.size(22.dp))
             Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
@@ -438,7 +519,7 @@ private fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun SearchBox(svc: EveryDayKeysService, c: KbColors, hint: String, modifier: Modifier) {
-    val shape = RectangleShape
+    val shape = RoundedCornerShape(10.dp)
     Row(
         modifier.height(40.dp).clip(shape).background(c.bg.copy(alpha = 0.5f))
             .border(if (svc.searching) 2.dp else 0.dp, c.accent, shape)
@@ -459,7 +540,7 @@ private fun ClipPanel(svc: EveryDayKeysService, c: KbColors) {
 @Composable
 private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
     Column(
-        Modifier.fillMaxWidth().height(200.dp).clip(RectangleShape).background(c.panel).padding(8.dp),
+        Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
         Icon(painterResource(R.drawable.ic_lock), null, tint = c.accent, modifier = Modifier.size(32.dp))
@@ -480,7 +561,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     var selected by remember { mutableStateOf(setOf<Long>()) }
     Column(
         Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp)
-            .clip(RectangleShape).background(c.panel).padding(8.dp)
+            .clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SearchBox(svc, c, "Search clipboard", Modifier.weight(1f))
@@ -514,7 +595,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
-                        Modifier.size(36.dp).clip(RectangleShape).background(if (isSel) c.accent else c.accent.copy(alpha = 0.15f)),
+                        Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(if (isSel) c.accent else c.accent.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -544,7 +625,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
 private fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
     val ctx = LocalContext.current
     val list by remember { AppDb.get(ctx).snippets().observe() }.collectAsState(initial = emptyList())
-    Column(Modifier.fillMaxWidth().height(230.dp).clip(RectangleShape).background(c.panel).padding(8.dp)) {
+    Column(Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Text snippets", color = c.text, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 6.dp))
             IconTap(R.drawable.ic_settings, "Manage snippets", c) { svc.openSettings() }
@@ -571,7 +652,7 @@ private fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
     val q = svc.query.trim().lowercase()
     val items = if (q.isEmpty()) (recents + Emojis.all.map { it.first }).distinct()
     else Emojis.all.filter { it.second.contains(q) }.map { it.first }
-    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp).clip(RectangleShape).background(c.panel).padding(8.dp)) {
+    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp).clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SearchBox(svc, c, "Search emoji", Modifier.weight(1f))
             IconTap(R.drawable.ic_keyboard, "Back to keyboard", c) { svc.closePanel() }
@@ -592,7 +673,7 @@ private fun ConvertPanel(svc: EveryDayKeysService, c: KbColors) {
     val from = cat.units[svc.convFrom.coerceIn(0, cat.units.lastIndex)]
     val to = cat.units[svc.convTo.coerceIn(0, cat.units.lastIndex)]
     val v = svc.convText.replace(",", "").toDoubleOrNull()
-    Column(Modifier.fillMaxWidth().clip(RectangleShape).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconTap(R.drawable.ic_chevron_left, "Previous category", c) { svc.convStep(-1) }
             Text(cat.name, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
@@ -622,7 +703,7 @@ private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbCol
                 val on = i == selected
                 Text(
                     u.name, color = if (on) Color.White else c.text, fontSize = 15.sp, maxLines = 1,
-                    modifier = Modifier.clip(RectangleShape).background(if (on) c.accent else c.key)
+                    modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) c.accent else c.key)
                         .clickable(onClickLabel = "Choose ${u.name}") { onPick(i) }.padding(horizontal = 14.dp, vertical = 12.dp)
                 )
             }
@@ -633,21 +714,22 @@ private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbCol
 @Composable
 private fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val gap = Arrangement.spacedBy(5.dp)
-    Column(Modifier.fillMaxWidth().clip(RectangleShape).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            Key(svc, c, Modifier.weight(1f).height(h), "Cursor left", icon = R.drawable.ic_left, repeat = true) { svc.moveCursor(-1) }
-            Key(svc, c, Modifier.weight(1f).height(h), "Cursor up", icon = R.drawable.ic_up, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
-            Key(svc, c, Modifier.weight(1f).height(h), "Cursor down", icon = R.drawable.ic_down, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
-            Key(svc, c, Modifier.weight(1f).height(h), "Cursor right", icon = R.drawable.ic_right, repeat = true) { svc.moveCursor(1) }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Cursor left", icon = R.drawable.ic_left, repeat = true) { svc.moveCursor(-1) }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Cursor up", icon = R.drawable.ic_up, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Cursor down", icon = R.drawable.ic_down, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Cursor right", icon = R.drawable.ic_right, repeat = true) { svc.moveCursor(1) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            Key(svc, c, Modifier.weight(1f).height(h), "Select all", icon = R.drawable.ic_select_all, tone = 1) { svc.selectAll() }
-            Key(svc, c, Modifier.weight(1f).height(h), "Copy", icon = R.drawable.ic_copy, tone = 1) { svc.copy() }
-            Key(svc, c, Modifier.weight(1f).height(h), "Cut", icon = R.drawable.ic_cut, tone = 1) { svc.cut() }
-            Key(svc, c, Modifier.weight(1f).height(h), "Paste latest history item", icon = R.drawable.ic_paste, tone = 1) { svc.paste() }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Select all", icon = R.drawable.ic_select_all, tone = 1) { svc.selectAll() }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Copy", icon = R.drawable.ic_copy, tone = 1) { svc.copy() }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Cut", icon = R.drawable.ic_cut, tone = 1) { svc.cut() }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Paste latest history item", icon = R.drawable.ic_paste, tone = 1) { svc.paste() }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-            Key(svc, c, Modifier.weight(1f).height(h), "Back to keyboard", icon = R.drawable.ic_keyboard, tone = 2) { svc.closePanel() }
+            Key(svc, c, Modifier.weight(1f).aspectRatio(1f), "Back to keyboard", icon = R.drawable.ic_keyboard, tone = 2) { svc.closePanel() }
+            repeat(3) { Spacer(Modifier.weight(1f)) }
         }
     }
 }

@@ -1,6 +1,5 @@
 package com.mkmehmood.everydaykeys.data
 
-import android.text.Html
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -25,13 +24,49 @@ object Translator {
 
     const val MAX_CHARS = 5000
 
-    suspend fun translate(text: String, target: String, provider: String, googleKey: String, deeplKey: String, email: String): String =
+    fun nameOf(code: String) = languages.firstOrNull { it.first == code }?.second ?: code
+
+    private val urduOnly = "ٹڈڑںےھہۂۃ"
+    private val englishWords = setOf("the", "and", "is", "to", "of", "a", "in", "that", "it", "for", "you", "i", "are", "this", "with",
+        "what", "how", "my", "me", "we", "be", "on", "have", "not", "your", "can", "do", "was", "but", "hello", "hi", "thanks", "please")
+
+    /** Best-effort source language from the writing system; null when it cannot be told (e.g. Latin text that is not English). */
+    fun detectSource(text: String): String? {
+        var arabic = 0; var deva = 0; var beng = 0; var cjk = 0; var kana = 0; var hangul = 0; var cyr = 0; var latin = 0; var urdu = 0
+        for (ch in text) when {
+            ch in '\u0600'..'\u06FF' || ch in '\u0750'..'\u077F' -> { arabic++; if (ch in urduOnly) urdu++ }
+            ch in '\u0900'..'\u097F' -> deva++
+            ch in '\u0980'..'\u09FF' -> beng++
+            ch in '\u4E00'..'\u9FFF' -> cjk++
+            ch in '\u3040'..'\u30FF' -> kana++
+            ch in '\uAC00'..'\uD7AF' -> hangul++
+            ch in '\u0400'..'\u04FF' -> cyr++
+            ch in 'A'..'Z' || ch in 'a'..'z' || ch in '\u00C0'..'\u024F' -> latin++
+        }
+        val top = maxOf(arabic, deva, beng, cjk, kana, hangul, cyr, latin)
+        if (top == 0) return null
+        return when (top) {
+            arabic -> if (urdu > 0) "ur" else "ar"
+            deva -> "hi"
+            beng -> "bn"
+            kana -> "ja"
+            cjk -> if (kana > 0) "ja" else "zh"
+            hangul -> "ko"
+            cyr -> "ru"
+            else -> {
+                val words = text.lowercase().split(Regex("[^a-z']+")).filter { it.isNotEmpty() }
+                if (text.all { it.code < 128 } && words.any { it in englishWords }) "en" else null
+            }
+        }
+    }
+
+    suspend fun translate(text: String, target: String, source: String?, provider: String, googleKey: String, deeplKey: String, email: String): String =
         withContext(Dispatchers.IO) {
             val t = text.take(MAX_CHARS)
             when (provider) {
                 "google" -> google(t, target, googleKey)
                 "deepl" -> deepl(t, target, deeplKey)
-                else -> myMemory(t, target, email)
+                else -> myMemory(t, target, source, email)
             }
         }
 
@@ -51,23 +86,35 @@ object Translator {
         return out
     }
 
-    private fun myMemory(text: String, target: String, email: String): String {
-        val tgt = if (target == "zh") "zh-CN" else target
+    private fun myMemory(text: String, target: String, source: String?, email: String): String {
+        val tgt = mm(target); val src = source?.let { mm(it) } ?: "Autodetect"
         return chunks(text).joinToString("") { part ->
             val lead = part.takeWhile { it.isWhitespace() }; val trail = part.takeLastWhile { it.isWhitespace() }
             val q = part.trim()
             if (q.isEmpty()) return@joinToString part
-            val url = "https://api.mymemory.translated.net/get?q=" + enc(q) + "&langpair=" + enc("Autodetect|$tgt") +
+            val url = "https://api.mymemory.translated.net/get?q=" + enc(q) + "&langpair=" + enc("$src|$tgt") +
                 (if (email.contains("@")) "&de=" + enc(email.trim()) else "")
             val (code, body) = http(url)
             val j = runCatching { JSONObject(body) }.getOrNull() ?: throw Failure("MyMemory returned an unreadable reply (HTTP $code)")
             val status = j.optInt("responseStatus", code)
             val res = j.optJSONObject("responseData")?.optString("translatedText").orEmpty()
-            if (status != 200 || res.isBlank() || res.startsWith("MYMEMORY WARNING", true))
-                throw Failure(if (status == 429 || res.startsWith("MYMEMORY WARNING", true)) "MyMemory daily limit reached. Add an email in settings for a higher limit, or use Google/DeepL with your own key."
+            val warn = res.startsWith("MYMEMORY WARNING", true) || j.optString("responseDetails").startsWith("MYMEMORY WARNING", true)
+            val same = res.startsWith("PLEASE SELECT TWO DISTINCT", true) || j.optString("responseDetails").startsWith("PLEASE SELECT TWO DISTINCT", true)
+            if (same) throw Failure("The text is already in ${nameOf(target)}")
+            if (status != 200 || res.isBlank() || warn)
+                throw Failure(if (status == 429 || warn) "MyMemory daily limit reached. Add an email in settings for a higher limit, or use Google/DeepL with your own key."
                 else j.optString("responseDetails").ifBlank { "MyMemory error $status" })
-            lead + Html.fromHtml(res, Html.FROM_HTML_MODE_LEGACY).toString() + trail
+            lead + unescape(res) + trail
         }
+    }
+
+    private fun mm(code: String) = when (code) { "zh" -> "zh-CN"; else -> code }
+
+    private fun unescape(s: String): String {
+        if (!s.contains('&')) return s
+        var r = s.replace("&quot;", "\"").replace("&#39;", "'").replace("&apos;", "'").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+        r = Regex("&#(\\d+);").replace(r) { m -> m.groupValues[1].toIntOrNull()?.let { String(Character.toChars(it)) } ?: m.value }
+        return r
     }
 
     // ---- Google Cloud Translation v2 (official)
@@ -78,7 +125,7 @@ object Translator {
             "q=${enc(text)}&target=$tgt&format=text", mapOf("X-goog-api-key" to key.trim()))
         val j = runCatching { JSONObject(body) }.getOrNull() ?: throw Failure("Google returned an unreadable reply (HTTP $code)")
         if (code != 200) throw Failure(j.optJSONObject("error")?.optString("message").orEmpty().ifBlank { "Google error $code" })
-        return Html.fromHtml(j.getJSONObject("data").getJSONArray("translations").getJSONObject(0).getString("translatedText"), Html.FROM_HTML_MODE_LEGACY).toString()
+        return unescape(j.getJSONObject("data").getJSONArray("translations").getJSONObject(0).getString("translatedText"))
     }
 
     // ---- DeepL API Free (official)

@@ -57,9 +57,7 @@ object Defs {
             Toggle("accentPopup", "Long-press accents and alternates", true),
             Toggle("langKey", "Language switch key", true)
         )),
-        Section("numpad", "Number pad", "Phone style, operators row", R.drawable.ic_numpad, listOf(
-            Choice("padStyle", "Default layout", listOf("phone" to "Phone (1-2-3 on top)", "calc" to "Calculator (7-8-9 on top)"), "phone"),
-            Toggle("mathRow", "Show operators row", true),
+        Section("numpad", "Number pad", "Layout and auto-switch", R.drawable.ic_numpad, listOf(
             Toggle("autoNumPad", "Switch to number pad in number and phone fields", true)
         )),
         Section("clip", "Clipboard", "Unlimited size, history on", R.drawable.ic_clipboard, listOf(
@@ -78,7 +76,6 @@ object Defs {
             Choice("autocorrect", "Autocorrect", listOf("off" to "Off", "mild" to "Mild", "strong" to "Strong"), "mild"),
             Toggle("suggestions", "Word suggestions", true),
             Toggle("nextWord", "Next-word suggestions (learned on this phone)", true),
-            Toggle("autoSpaceSymbols", "Add a space after punctuation and symbols", true),
             Toggle("onlineSuggestions", "Live online suggestions", false),
             Toggle("autoCap", "Auto-capitalization", true),
             Toggle("doubleSpace", "Double-space for a period", true),
@@ -93,12 +90,23 @@ object Defs {
             Input("translateEmail", "Email for a higher free MyMemory limit (optional)"),
             Action("translateNote", "Sent only when you tap Translate", "The text you translate goes to the provider you chose. Nothing is sent automatically.")
         )),
-        Section("appearance", "Appearance", "Theme, key height, font size", R.drawable.ic_sun, listOf(
+        Section("keystyle", "Key size, shape and font", "Resize, reshape, restyle, font", R.drawable.ic_text, listOf(
+            Slide("keyScale", "Keyboard size (%)", 60, 100, 100),
+            Choice("keyShape", "Key shape", listOf("square" to "Square corners", "slight" to "Slightly rounded", "rounded" to "Rounded", "soft" to "Very rounded", "round" to "Round"), "rounded"),
+            Choice("keyStyle", "Key style", listOf("raised" to "Raised", "flat" to "Flat", "outline" to "Outline"), "raised"),
+            Choice("keyFont", "Key font", listOf("sans" to "Sans-serif", "serif" to "Serif", "mono" to "Monospace", "cursive" to "Cursive"), "sans"),
+            Choice("keyWeight", "Font weight", listOf("normal" to "Normal", "medium" to "Medium", "bold" to "Bold"), "medium"),
+            Slide("fontSize", "Key font size", 12, 28, 20)
+        )),
+        Section("appearance", "Appearance", "Theme, accent, background", R.drawable.ic_sun, listOf(
             Choice("theme", "Theme", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"), "system"),
             Choice("accent", "Accent color", listOf("teal" to "Teal", "blue" to "Blue", "purple" to "Purple", "orange" to "Orange"), "teal"),
-            Slide("keyHeight", "Key height", 40, 72, 52),
-            Slide("fontSize", "Key font size", 14, 28, 20),
             Toggle("borders", "Key borders", false),
+            Action("bgEdit", "Background image", "Choose a photo, crop, zoom, dim, blur"),
+            Toggle("bgOn", "Show background image", false),
+            Slide("bgDim", "Image dimming (%)", 0, 90, 35),
+            Slide("bgBlur", "Image blur (Android 12+)", 0, 25, 0),
+            Slide("bgKeyAlpha", "Key opacity over image (%)", 30, 100, 85),
             Choice("oneHanded", "One-handed mode", listOf("off" to "Off", "left" to "Left", "right" to "Right"), "off")
         )),
         Section("keys", "Keys and feedback", "Vibration, sound, long-press", R.drawable.ic_vibration, listOf(
