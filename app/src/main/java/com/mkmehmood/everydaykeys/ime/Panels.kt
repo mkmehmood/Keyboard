@@ -107,9 +107,9 @@ class ClipPanel(private val svc: EverydayKeysService, private val pal: Palette) 
     private val query = MutableStateFlow("")
     private var job: Job? = null
     private val selected = LinkedHashSet<Long>()
-    private val field: SearchField
-    private val adapter: RowAdapter<Clip>
-    private val empty: TextView
+    private lateinit var field: SearchField
+    private lateinit var adapter: RowAdapter<Clip>
+    private lateinit var empty: TextView
     private val body = LinearLayout(svc)
     private val lockedBox = LinearLayout(svc)
 
@@ -210,8 +210,8 @@ class ClipPanel(private val svc: EverydayKeysService, private val pal: Palette) 
 
 class SnippetsPanel(private val svc: EverydayKeysService, private val pal: Palette) : LinearLayout(svc) {
     private var job: Job? = null
-    private val adapter: RowAdapter<Snippet>
-    private val empty: TextView
+    private lateinit var adapter: RowAdapter<Snippet>
+    private lateinit var empty: TextView
 
     init {
         orientation = VERTICAL
@@ -255,8 +255,8 @@ class SnippetsPanel(private val svc: EverydayKeysService, private val pal: Palet
 
 class EmojiPanel(private val svc: EverydayKeysService, private val pal: Palette) : LinearLayout(svc) {
     private val prefs = svc.getSharedPreferences("emoji", Context.MODE_PRIVATE)
-    private val field: SearchField
-    private val adapter: RowAdapter<String>
+    private lateinit var field: SearchField
+    private lateinit var adapter: RowAdapter<String>
     private var q = ""
 
     init {

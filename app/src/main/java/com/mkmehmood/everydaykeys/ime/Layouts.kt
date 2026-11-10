@@ -82,7 +82,7 @@ object Layouts {
     }
 
     fun symbols(page: Int): List<List<Key>> {
-        val data = if (page == 1) listOf("1234567890", "@#$_&-+()/", "*\"':;!?")
+        val data = if (page == 1) listOf("1234567890", "@#\$_&-+()/", "*\"':;!?")
         else listOf("[]{}<>^%=\\", "$€£¥₹¢₨~|•", "©®™°±×÷")
         val k = { s: String -> s.map { Key(text = it.toString(), alts = ALTS[it] ?: "") } }
         return listOf(
