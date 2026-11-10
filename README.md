@@ -22,6 +22,14 @@ Tip: long-press the number-pad key to open symbols.
 
 Glide typing and floating keyboard mode. Both need testing on real devices to tune, so they are not shipped yet.
 
+## Design system
+
+Settings and everything the keyboard shows above the keys are built from one set of pieces in `design/Design.kt`
+(cards, tiles, rows, toggles, buttons, notes, notices). The keyboard and Settings only differ in the colours they feed in.
+While typing you get the same look for the clipboard, snippets, emoji, converter, cursor keys, paste progress and the new
+**Quick settings** panel (enable it under Settings, Toolbar). Copy, cut, paste, select all, undo and redo each show a short
+confirmation over the keyboard.
+
 ## Build
 
 Open in Android Studio (JDK 17) or run `./gradlew assembleRelease`. Release signing reads `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. In CI, add repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` for a stable signing key; without them a throwaway key is generated per build (APKs install, but you cannot update over a build signed with a different key).

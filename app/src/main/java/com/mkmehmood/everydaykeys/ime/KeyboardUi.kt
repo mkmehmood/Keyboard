@@ -154,8 +154,11 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
                 Panel.EMOJI -> { EmojiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.CURSOR -> CursorPanel(svc, c, h)
                 Panel.CONVERT -> ConvertPanel(svc, c)
+                Panel.QUICK -> QuickPanel(svc, c)
             }
         }
+        // confirmation for copy, cut, paste, select all, undo and redo; it has no touch handling, so keys underneath stay usable
+        svc.notice?.let { n -> Box(Modifier.matchParentSize().padding(top = 5.dp), contentAlignment = Alignment.TopCenter) { NoticePill(c, n) } }
     }
 }
 
@@ -526,6 +529,7 @@ private fun tool(id: String): Tool? = when (id) {
     "redo" -> Tool(R.drawable.ic_redo, "Redo") { it.redo() }
     "cursor" -> Tool(R.drawable.ic_code, "Cursor and edit keys") { it.openPanel(Panel.CURSOR) }
     "convert" -> Tool(R.drawable.ic_ruler, "Unit converter") { it.openPanel(Panel.CONVERT) }
+    "quick" -> Tool(R.drawable.ic_tune, "Quick settings") { it.openPanel(Panel.QUICK) }
     "style" -> Tool(R.drawable.ic_sun, "Switch layout style") { it.cycleLayoutStyle() }
     "settings" -> Tool(R.drawable.ic_settings, "Settings") { it.openSettings() }
     else -> null
