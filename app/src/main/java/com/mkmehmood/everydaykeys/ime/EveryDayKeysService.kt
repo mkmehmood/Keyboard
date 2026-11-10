@@ -75,6 +75,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var lastCorr: Corr? = null
     private var keepAsTyped: String? = null
     private var autoSpaced = false
+    /** true right after a suggestion added its trailing space, so punctuation can take that space's place */
+    private var suggestSpaced = false
     /** Most recently copied item that has not been pasted yet; shown in the suggestion bar. */
     var pendingClip by mutableStateOf<Clip?>(null)
     val showClipChip: Boolean get() = pendingClip != null && !sensitive && clipUnlocked
@@ -231,6 +233,9 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         // a symbol already added its space, so a following Space tap should not make a second one
         val justSpaced = autoSpaced
         autoSpaced = false
+        val afterSuggestion = suggestSpaced
+        suggestSpaced = false
+        if (afterSuggestion && c.length == 1 && c[0] in ".,;:!?)" && smart) pullBackSpace(ic)
         if (c == " " && justSpaced && smart && ic.getTextBeforeCursor(1, 0)?.toString() == " ") { afterTyped(); return }
         val sep = c.length == 1 && (c[0].isWhitespace() || c[0] in ".,;:!?)")
         val corr = if (sep && smart) expandAndCorrect(ic) else null
@@ -266,11 +271,20 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         return !(next.isNotEmpty() && next[0].isWhitespace())
     }
 
+    /** Removes the space a suggestion added, so the symbol sits against the word and then gets its own space after it. */
+    private fun pullBackSpace(ic: InputConnection) {
+        val b = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+        if (b.length == 2 && b[1] == ' ' && !b[0].isWhitespace()) ic.deleteSurroundingText(1, 0)
+    }
+
     /** Symbol keys: type the symbol, then a space after it. */
     fun typeSymbol(k: String) {
         val ic = currentInputConnection ?: return
         if (searching) { query += k; return }
         lastCorr = null
+        val afterSuggestion = suggestSpaced
+        suggestSpaced = false
+        if (afterSuggestion && k.length == 1 && k[0] in ".,;:!?)" && smart) pullBackSpace(ic)
         val spaced = wantsSpaceAfter(ic, k)
         ic.commitText(if (spaced) "$k " else k, 1)
         autoSpaced = spaced
@@ -413,6 +427,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         if (lang == "en") learnPair(b.dropLast(w.length), s)
         afterTyped()
         lastCorr = if (w.isNotEmpty()) Corr(w, s, " ") else null
+        suggestSpaced = true
         keepAsTyped = null
     }
 
