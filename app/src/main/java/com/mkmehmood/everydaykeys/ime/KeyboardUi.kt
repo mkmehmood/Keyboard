@@ -87,7 +87,7 @@ private fun Keys(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     when (svc.mode) {
         Mode.LETTERS -> LettersView(svc, c, h)
         Mode.NUMPAD -> NumpadView(svc, c, h)
-        Mode.SYM1, Mode.SYM2 -> SymbolsView(svc, c, h)
+        Mode.SYM1, Mode.SYM2, Mode.SYM3, Mode.SYM4 -> SymbolsView(svc, c, h)
     }
 }
 
@@ -258,7 +258,9 @@ private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 @Composable
 private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val gap = Arrangement.spacedBy(5.dp)
-    val rows = if (svc.mode == Mode.SYM1) Layouts.sym1 else Layouts.sym2
+    val symModes = listOf(Mode.SYM1, Mode.SYM2, Mode.SYM3, Mode.SYM4)
+    val page = symModes.indexOf(svc.mode).coerceAtLeast(0)
+    val rows = Layouts.symPages[page]
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         rows.forEachIndexed { i, row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
@@ -268,8 +270,8 @@ private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
             Key(svc, c, Modifier.weight(1.2f).height(h), "Back to letters", icon = R.drawable.ic_keyboard, tone = 1) { svc.mode = Mode.LETTERS }
-            Key(svc, c, Modifier.weight(1.2f).height(h), "Switch symbol page", icon = R.drawable.ic_swap, tone = 1) {
-                svc.mode = if (svc.mode == Mode.SYM1) Mode.SYM2 else Mode.SYM1
+            Key(svc, c, Modifier.weight(1.2f).height(h), "Next symbol page (${page + 1} of ${symModes.size})", icon = R.drawable.ic_swap, tone = 1) {
+                svc.mode = symModes[(page + 1) % symModes.size]
             }
             Key(svc, c, Modifier.weight(1.2f).height(h), "Number pad", icon = R.drawable.ic_numpad, tone = 1) { svc.mode = Mode.NUMPAD }
             SpaceKey(svc, c, Modifier.weight(3f).height(h))

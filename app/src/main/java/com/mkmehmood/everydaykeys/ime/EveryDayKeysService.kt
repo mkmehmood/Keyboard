@@ -36,7 +36,7 @@ import com.mkmehmood.everydaykeys.ui.VoiceActivity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 
-enum class Mode { LETTERS, NUMPAD, SYM1, SYM2 }
+enum class Mode { LETTERS, NUMPAD, SYM1, SYM2, SYM3, SYM4 }
 enum class Panel { NONE, CLIP, SNIPPETS, EMOJI, CURSOR }
 enum class Shift { OFF, ONCE, LOCK }
 

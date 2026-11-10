@@ -23,6 +23,12 @@ object Layouts {
 
     val sym1 = listOf(r("1 2 3 4 5 6 7 8 9 0"), r("@ # $ _ & - + ( ) /"), r("* \" ' : ; ! ? ,"))
     val sym2 = listOf(r("~ ` | ^ { } [ ] < >"), r("€ £ ¥ ₹ ¢ ° = % \\ •"), r("© ® ™ § … ¿ ¡ ."))
+    /** math and science */
+    val sym3 = listOf(r("± × ÷ ≠ ≈ ≤ ≥ ∞ √ π"), r("∑ ∏ ∆ ∫ ∂ ∈ ∉ ∪ ∩ ∅"), r("² ³ ¼ ½ ¾ ‰ µ Ω ∴ ∵"))
+    /** arrows, marks, quotes and currency */
+    val sym4 = listOf(r("← → ↑ ↓ ↔ ⇒ ⇐ ⇔ ↩ ↪"), r("✓ ✗ ★ ☆ ♥ ♦ ♣ ♠ ♪ ☺"), r("« » “ ” ‘ ’ ‹ › ₽ ₩"))
+
+    val symPages = listOf(sym1, sym2, sym3, sym4)
 
     /** label shown on key, text committed */
     val ops = listOf("+" to "+", "−" to "-", "×" to "×", "÷" to "÷", "=" to "=", "%" to "%", "/" to "/")
