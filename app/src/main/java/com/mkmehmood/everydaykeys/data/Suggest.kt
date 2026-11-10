@@ -43,8 +43,11 @@ object Suggest {
         dict.remove(w); used.remove(w); autoLearned.remove(w); cache.clear(); usageDirty = true
     }
 
-    private fun matchCase(src: String, w: String) =
-        if (src.isNotEmpty() && src[0].isUpperCase()) w.replaceFirstChar { it.uppercase() } else w
+    private fun matchCase(src: String, w: String) = when {
+        src.length >= 2 && src.all { !it.isLetter() || it.isUpperCase() } -> w.uppercase()   // typing in capitals
+        src.isNotEmpty() && src[0].isUpperCase() -> w.replaceFirstChar { it.uppercase() }
+        else -> w
+    }
 
     fun matchCaseOf(src: String, w: String) = matchCase(src, w)
 
@@ -61,6 +64,16 @@ object Suggest {
         usageDirty = true
         if (n >= AUTO_LEARN_AFTER && !dict.containsKey(w)) { dict[w] = AUTO_LEARN_SCORE; autoLearned.add(w) }
         if (used.size > 6000) used.entries.removeIf { it.value <= 1 }
+        cache.clear()
+    }
+
+    /** The user reverted an autocorrect: this word is fine, never correct it again and offer it in suggestions. */
+    fun keep(word: String) {
+        val w = word.lowercase()
+        if (w.length < 3 || w.length > 24 || !w.all { it.isLetter() || it == '\'' }) return
+        used[w] = maxOf(used[w] ?: 0, AUTO_LEARN_AFTER)
+        if (!dict.containsKey(w)) { dict[w] = AUTO_LEARN_SCORE; autoLearned.add(w) }
+        usageDirty = true
         cache.clear()
     }
 
@@ -156,10 +169,28 @@ object Suggest {
         return res.sortedByDescending { it.first }.map { it.second }.distinct().take(k)
     }
 
+    /** Common contractions typed without the apostrophe. */
+    private val contractions = mapOf(
+        "im" to "I'm", "ive" to "I've", "i'm" to "I'm", "i'll" to "I'll", "i've" to "I've", "i'd" to "I'd",
+        "dont" to "don't", "doesnt" to "doesn't", "didnt" to "didn't", "isnt" to "isn't", "arent" to "aren't",
+        "wasnt" to "wasn't", "werent" to "weren't", "hasnt" to "hasn't", "havent" to "haven't", "hadnt" to "hadn't",
+        "couldnt" to "couldn't", "wouldnt" to "wouldn't", "shouldnt" to "shouldn't", "cant" to "can't", "wont" to "won't",
+        "youre" to "you're", "theyre" to "they're", "thats" to "that's", "whats" to "what's",
+        "weve" to "we've", "youve" to "you've", "theyve" to "they've"
+    )
+
     /** Returns a replacement for [word], or null to leave it alone. level 1 = mild, 2 = strong. */
     fun correct(word: String, level: Int): String? {
-        if (word.length < 3 || word[0].isUpperCase()) return null
-        val w = word.lowercase()
+        if (word == "i") return "I"
+        val low = word.lowercase()
+        if (low in autoLearned) return null   // typed often, or reverted before: the user wants it this way
+        // contractions work for "dont" and "Dont", but never for DONT or mixed case
+        if (word == low || word == low.replaceFirstChar { it.uppercase() }) {
+            contractions[low]?.let { return if (word[0].isUpperCase()) it.replaceFirstChar { c -> c.uppercase() } else it }
+        }
+        // names, acronyms and mixed case are left alone, since the dictionary cannot know them
+        if (word.length < 3 || word.any { it.isUpperCase() }) return null
+        val w = low
         if (dict.containsKey(w) || !w.all { it in 'a'..'z' || it == '\'' }) return null
         swaps(w).filter { dict.containsKey(it) }.maxByOrNull { score(it, dict.getValue(it)) }?.let { return it }
         val maxDist = if (level >= 2 && w.length >= 5) 2 else 1

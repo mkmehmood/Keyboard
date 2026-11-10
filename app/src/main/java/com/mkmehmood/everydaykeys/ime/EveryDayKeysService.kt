@@ -71,12 +71,20 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     /** true while the user has opened the toolbox. Tools also show on their own when there are no suggestions. */
     var toolsOpen by mutableStateOf(false)
     /** The last autocorrect or applied suggestion, so one Backspace can bring back exactly what was typed. */
-    private class Corr(val original: String, val replaced: String, val tail: String)
+    private class Corr(val original: String, val replaced: String, val tail: String, val autocorrect: Boolean)
     private var lastCorr: Corr? = null
     private var keepAsTyped: String? = null
     private var autoSpaced = false
     /** true right after a suggestion added its trailing space, so punctuation can take that space's place */
     private var suggestSpaced = false
+    /** When the keyboard itself last changed the text; a cursor move long after that came from the user. */
+    private var ownEditAt = 0L
+    private fun touch() { ownEditAt = SystemClock.uptimeMillis() }
+
+    /** Forget everything that only makes sense right after our own edit (undo, soft spaces, double-space timing). */
+    private fun resetTypingState() {
+        lastCorr = null; keepAsTyped = null; autoSpaced = false; suggestSpaced = false; lastSpaceAt = 0L
+    }
     /** Most recently copied item that has not been pasted yet; shown in the suggestion bar. */
     var pendingClip by mutableStateOf<Clip?>(null)
     val showClipChip: Boolean get() = pendingClip != null && !sensitive && clipUnlocked
@@ -194,6 +202,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         smart = !sensitive && cls == InputType.TYPE_CLASS_TEXT &&
                 v != InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS && v != InputType.TYPE_TEXT_VARIATION_URI &&
                 (editorInfo.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) == 0
+        resetTypingState()
         closePanel()
         if (reopenClip) { reopenClip = false; openPanel(Panel.CLIP) }
         progress = null
@@ -213,6 +222,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
         super.onUpdateSelection(a, b, c, d, e, f)
+        // the cursor moved and it was not our typing: old undo and spacing state no longer applies
+        if (SystemClock.uptimeMillis() - ownEditAt > 500) resetTypingState()
         refreshSuggestions()
     }
 
@@ -228,15 +239,30 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         if (searching) { query += if (shift != Shift.OFF) raw.uppercase() else raw; if (shift == Shift.ONCE) shift = Shift.OFF; return }
         val ic = currentInputConnection ?: return
         alts = null
+        touch()
         lastCorr = null
         val c = if (shift != Shift.OFF) raw.uppercase() else raw
-        // a symbol already added its space, so a following Space tap should not make a second one
-        val justSpaced = autoSpaced
+        // A space we added ourselves (after a symbol or a tapped suggestion) may sit right before the cursor.
+        val fromSymbol = autoSpaced
+        val fromSuggestion = suggestSpaced
         autoSpaced = false
-        val afterSuggestion = suggestSpaced
         suggestSpaced = false
-        if (afterSuggestion && c.length == 1 && c[0] in ".,;:!?)" && smart) pullBackSpace(ic)
-        if (c == " " && justSpaced && smart && ic.getTextBeforeCursor(1, 0)?.toString() == " ") { afterTyped(); return }
+        if (smart && (fromSymbol || fromSuggestion) && c.length == 1) {
+            val b = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+            val spaceBefore = b.length == 2 && b[1] == ' ' && !b[0].isWhitespace()
+            if (spaceBefore) {
+                if (c == " ") {
+                    // the space is already there; a quick second tap still turns it into ". "
+                    lastSpaceAt = SystemClock.uptimeMillis()
+                    afterTyped(); return
+                }
+                val ch = c[0]
+                val pullBack = (fromSuggestion && ch in ".,;:!?)") ||
+                    (fromSymbol && ch in ".!?" && b[0] in ".!?)]}…") ||        // "..." and "?!" stay together
+                    (fromSymbol && ch in ".,;:!?" && b[0] in ")]}")          // ")." instead of ") ."
+                if (pullBack) ic.deleteSurroundingText(1, 0)
+            }
+        }
         val sep = c.length == 1 && (c[0].isWhitespace() || c[0] in ".,;:!?)")
         val corr = if (sep && smart) expandAndCorrect(ic) else null
         if (c == " " && smart && prefs.bool("doubleSpace")) {
@@ -251,7 +277,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         val out = if (wantsSpaceAfter(ic, c)) "$c " else c
         ic.commitText(out, 1)
         autoSpaced = out.length > c.length
-        if (corr != null) lastCorr = Corr(corr.first, corr.second, out)
+        if (corr != null) lastCorr = Corr(corr.first, corr.second, out, autocorrect = true)
         if (shift == Shift.ONCE) shift = Shift.OFF
         afterTyped()
     }
@@ -271,20 +297,18 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         return !(next.isNotEmpty() && next[0].isWhitespace())
     }
 
-    /** Removes the space a suggestion added, so the symbol sits against the word and then gets its own space after it. */
-    private fun pullBackSpace(ic: InputConnection) {
-        val b = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
-        if (b.length == 2 && b[1] == ' ' && !b[0].isWhitespace()) ic.deleteSurroundingText(1, 0)
-    }
-
     /** Symbol keys: type the symbol, then a space after it. */
     fun typeSymbol(k: String) {
         val ic = currentInputConnection ?: return
         if (searching) { query += k; return }
+        touch()
         lastCorr = null
-        val afterSuggestion = suggestSpaced
-        suggestSpaced = false
-        if (afterSuggestion && k.length == 1 && k[0] in ".,;:!?)" && smart) pullBackSpace(ic)
+        val fromSuggestion = suggestSpaced
+        autoSpaced = false; suggestSpaced = false
+        if (fromSuggestion && smart && k.length == 1 && k[0] in ".,;:!?)") {
+            val b = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+            if (b.length == 2 && b[1] == ' ' && !b[0].isWhitespace()) ic.deleteSurroundingText(1, 0)
+        }
         val spaced = wantsSpaceAfter(ic, k)
         ic.commitText(if (spaced) "$k " else k, 1)
         autoSpaced = spaced
@@ -293,13 +317,14 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     fun onAlt(s: String) {
         if (searching) { query += s; alts = null; return }
+        touch(); resetTypingState()
         currentInputConnection?.commitText(s, 1)
         alts = null
         if (shift == Shift.ONCE) shift = Shift.OFF
         afterTyped()
     }
 
-    fun commitText(t: String) { currentInputConnection?.commitText(t, 1); afterTyped() }
+    fun commitText(t: String) { touch(); resetTypingState(); currentInputConnection?.commitText(t, 1); afterTyped() }
 
     private fun afterTyped() { updateAutoCap(); refreshSuggestions() }
 
@@ -308,17 +333,22 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         val before = ic.getTextBeforeCursor(64, 0)?.toString() ?: return null
         val tok = before.takeLastWhile { !it.isWhitespace() }
         snippetMap[tok]?.let { ic.deleteSurroundingText(tok.length, 0); ic.commitText(it, 1); return null }
-        val word = before.takeLastWhile { it.isLetter() || it == '\'' }
+        // only a plain word right before the cursor is touched: not part of a URL, email or number, and not the left half of a word
+        val after = ic.getTextAfterCursor(1, 0)?.toString().orEmpty()
+        val word = if (WordContext.insideWord(after)) "" else WordContext.currentWord(before)
+        val keep = keepAsTyped
+        keepAsTyped = null
+        if (word.isEmpty()) return null
         val level = when (prefs.str("autocorrect")) { "mild" -> 1; "strong" -> 2; else -> 0 }
         var finalWord = word
         var result: Pair<String, String>? = null
-        val keep = keepAsTyped
-        keepAsTyped = null
-        if (level > 0 && lang == "en" && word.isNotEmpty() && !word.equals(keep, ignoreCase = true)) {
+        if (level > 0 && lang == "en" && !word.equals(keep, ignoreCase = true)) {
             Suggest.correct(word, level)?.let { ic.deleteSurroundingText(word.length, 0); ic.commitText(it, 1); finalWord = it; result = word to it }
         }
-        if (lang == "en") learnPair(before.dropLast(word.length), finalWord)
-        if (lang == "en" && result == null && prefs.bool("learnWords")) Suggest.noteTyped(finalWord)
+        if (lang == "en") {
+            learnPair(before.dropLast(word.length), finalWord)
+            if (result == null && prefs.bool("learnWords")) Suggest.noteTyped(finalWord)
+        }
         return result
     }
 
@@ -335,7 +365,9 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     fun onBackspace() {
         if (searching) { query = query.dropLast(1); return }
+        touch()
         if (restoreTyped()) return
+        autoSpaced = false; suggestSpaced = false
         sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
         afterTyped()
     }
@@ -345,13 +377,18 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         val lc = lastCorr ?: return false
         lastCorr = null
         val ic = currentInputConnection ?: return false
+        // with text selected, Backspace must delete the selection, not undo a correction
+        if (!ic.getSelectedText(0).isNullOrEmpty()) return false
         val want = lc.replaced + lc.tail
         if (ic.getTextBeforeCursor(want.length, 0)?.toString() != want) return false
         ic.beginBatchEdit()
         ic.deleteSurroundingText(want.length, 0)
         ic.commitText(lc.original, 1)
         ic.endBatchEdit()
+        autoSpaced = false; suggestSpaced = false
         keepAsTyped = lc.original
+        // undoing an autocorrect teaches the keyboard that this word is fine; undoing a suggestion does not
+        if (lc.autocorrect) Suggest.keep(lc.original)
         afterTyped()
         return true
     }
@@ -359,7 +396,9 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     fun onEnter() {
         if (searching) { searching = false; return }
         val ic = currentInputConnection ?: return
+        touch()
         if (smart) expandAndCorrect(ic)
+        resetTypingState()
         val opts = info?.imeOptions ?: 0
         val action = opts and EditorInfo.IME_MASK_ACTION
         val noEnter = (opts and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
@@ -398,12 +437,15 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     fun refreshSuggestions() {
         onlineJob?.cancel()
         if (!smart || !prefs.bool("suggestions") || lang != "en") { suggestions = emptyList(); return }
+        val ic = currentInputConnection
         val n = prefs.int("suggestCount").coerceIn(2, 4)
-        val b = currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
-        val w = b.takeLastWhile { it.isLetter() || it == '\'' }
-        val head = b.dropLast(w.length)
-        val prev = if (head.endsWith(" ")) head.trimEnd().takeLastWhile { it.isLetter() || it == '\'' } else ""
+        val b = ic?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+        val after = ic?.getTextAfterCursor(1, 0)?.toString().orEmpty()
+        // no suggestions while the cursor is inside a word, since a tapped word could not replace all of it
+        if (WordContext.insideWord(after)) { suggestions = emptyList(); return }
+        val w = WordContext.currentWord(b)
         if (w.isEmpty()) {
+            val prev = if (b.endsWith(" ")) WordContext.currentWord(b.trimEnd()) else ""
             var next = if (prefs.bool("nextWord") && prev.isNotEmpty()) Bigrams.next(prev, n) else emptyList()
             // at the start of a sentence the suggested word needs a capital too
             if (shift != Shift.OFF) next = next.map { it.replaceFirstChar { c -> c.uppercase() } }
@@ -411,6 +453,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
             if (suggestions.isNotEmpty() && alts == null) toolsOpen = false
             return
         }
+        val head = b.dropLast(w.length)
+        val prev = if (head.endsWith(" ")) WordContext.currentWord(head.trimEnd()) else ""
         // words that usually follow the previous word are tried first, then the ones you use most
         val ctx = if (prefs.bool("contextRank") && prev.isNotEmpty()) Bigrams.next(prev, 40) else emptyList()
         val local = Suggest.suggest(w, ctx, n + 2, prefs.bool("typoSuggest"))
@@ -428,16 +472,25 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     fun applySuggestion(s: String) {
         val ic = currentInputConnection ?: return
-        val b = ic.getTextBeforeCursor(32, 0)?.toString().orEmpty()
-        val w = b.takeLastWhile { it.isLetter() || it == '\'' }
-        ic.deleteSurroundingText(w.length, 0)
-        ic.commitText("$s ", 1)
-        if (lang == "en") learnPair(b.dropLast(w.length), s)
-        if (lang == "en" && prefs.bool("learnWords")) Suggest.noteTyped(s)
+        touch()
+        val b = ic.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+        val after = ic.getTextAfterCursor(1, 0)?.toString().orEmpty()
+        val w = WordContext.currentWord(b)
+        // add a space unless one (or punctuation) already follows the cursor
+        val space = after.isEmpty() || !(after[0].isWhitespace() || after[0] in ".,;:!?)")
+        val tail = if (space) " " else ""
+        ic.beginBatchEdit()
+        if (w.isNotEmpty()) ic.deleteSurroundingText(w.length, 0)
+        ic.commitText(s + tail, 1)
+        ic.endBatchEdit()
+        if (lang == "en") {
+            learnPair(b.dropLast(w.length), s)
+            if (prefs.bool("learnWords")) Suggest.noteTyped(s)
+        }
+        resetTypingState()
         afterTyped()
-        lastCorr = if (w.isNotEmpty()) Corr(w, s, " ") else null
-        suggestSpaced = true
-        keepAsTyped = null
+        lastCorr = if (w.isNotEmpty()) Corr(w, s, tail, autocorrect = false) else null
+        suggestSpaced = space
     }
 
     fun nextLang() {
@@ -491,6 +544,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     fun cancelPaste() { pasteJob?.cancel(); progress = null }
 
     fun commitEmoji(e: String) {
+        touch(); resetTypingState()
         currentInputConnection?.commitText(e, 1)
         val recents = (listOf(e) + prefs.str("recentEmoji").split(" ").filter { it.isNotBlank() }).distinct().take(24)
         scope.launch { SettingsRepo.set(this@EveryDayKeysService, "recentEmoji", recents.joinToString(" ")) }
