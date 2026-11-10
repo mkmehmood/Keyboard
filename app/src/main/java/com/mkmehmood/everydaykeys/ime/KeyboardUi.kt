@@ -10,7 +10,9 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -19,7 +21,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -59,7 +61,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Height of the suggestion strip. It is always reserved so the keyboard does not jump while typing. */
-private val StripH = 44.dp
+private val StripH = 48.dp
 
 class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color) {
     companion object {
@@ -84,8 +86,7 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
     Box(Modifier.fillMaxWidth().background(c.bg), contentAlignment = align) {
         Column(Modifier.fillMaxWidth(if (oh == "off") 1f else 0.78f).padding(horizontal = 4.dp, vertical = 4.dp)) {
             if (svc.progress != null) ProgressCard(svc, c)
-            if (p.bool("showToolbar")) Toolbar(svc, c)
-            if (svc.panel == Panel.NONE) Strip(svc, c)
+            BarRow(svc, c)
             when (svc.panel) {
                 Panel.NONE -> Keys(svc, c, h)
                 Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
@@ -121,7 +122,7 @@ fun Key(
     val p = svc.prefs
     val base = when { tone == 2 || active -> c.accent; tone == 1 -> c.keyAlt; else -> c.key }
     val fg = if (tone == 2 || active) Color.White else c.text
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RectangleShape
     var m = modifier.clip(shape).background(if (pressed) base.copy(alpha = 0.65f) else base)
         .drawBehind {
             // 1dp lower edge gives each key a slight raised look.
@@ -165,7 +166,7 @@ fun Key(
         else if (label != null) Text(label, color = fg, fontSize = p.int("fontSize").sp, fontWeight = FontWeight.Medium, maxLines = 1)
         if (pressed && tone == 0 && label != null && label.length <= 2 && label.isNotBlank() && p.bool("keyPreview")) {
             val lift = with(LocalDensity.current) { 70.dp.roundToPx() }
-            val bubble = RoundedCornerShape(12.dp)
+            val bubble = RectangleShape
             Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -lift)) {
                 Box(
                     Modifier.size(52.dp, 64.dp).clip(bubble).background(c.key).border(1.dp, c.sub.copy(alpha = 0.4f), bubble),
@@ -179,14 +180,14 @@ fun Key(
 @Composable
 private fun IconTap(icon: Int, desc: String, c: KbColors, tint: Color = c.text, onClick: () -> Unit) {
     Box(
-        Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClickLabel = desc, role = Role.Button) { onClick() },
+        Modifier.size(48.dp).clip(RectangleShape).clickable(onClickLabel = desc, role = Role.Button) { onClick() },
         contentAlignment = Alignment.Center
     ) { Icon(painterResource(icon), desc, tint = tint, modifier = Modifier.size(22.dp)) }
 }
 
 @Composable
 private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RectangleShape
     Box(
         modifier.clip(shape).background(c.key)
             .semantics { contentDescription = "Space. Swipe left or right to move the cursor."; role = Role.Button; onClick { svc.onChar(" "); true } }
@@ -295,7 +296,7 @@ private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         rows.forEachIndexed { i, row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                row.forEach { k -> Key(svc, c, Modifier.weight(1f).height(h), k, label = k) { svc.commitText(k) } }
+                row.forEach { k -> Key(svc, c, Modifier.weight(1f).height(h), k, label = k) { svc.onChar(k) } }
                 if (i == 2) Key(svc, c, Modifier.weight(1.3f).height(h), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
             }
         }
@@ -328,10 +329,36 @@ private fun tool(id: String): Tool? = when (id) {
     else -> null
 }
 
+/**
+ * The single bar above the keys. The toolbox icon at the left opens the tools in place of the suggestions
+ * and collapses them again. While a panel (clipboard, emoji and so on) is open the tools stay visible,
+ * and the toolbox icon closes the panel.
+ */
 @Composable
-private fun Toolbar(svc: EveryDayKeysService, c: KbColors) {
+private fun BarRow(svc: EveryDayKeysService, c: KbColors) {
+    val hasTools = svc.prefs.bool("showToolbar")
+    val inPanel = svc.panel != Panel.NONE
+    if (!hasTools && inPanel) return
+    val busy = svc.trans != null || svc.alts != null
+    val showTools = hasTools && (inPanel || (svc.toolbarOpen && !busy))
+    Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
+        if (hasTools) {
+            val open = svc.toolbarOpen || inPanel
+            IconTap(R.drawable.ic_toolbox, if (open) "Collapse toolbar" else "Open toolbar", c, if (open) c.accent else c.text) {
+                svc.feedback()
+                if (inPanel) { svc.closePanel(); svc.toolbarOpen = false } else svc.toolbarOpen = !svc.toolbarOpen
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            if (showTools) ToolRow(svc, c) else Strip(svc, c)
+        }
+    }
+}
+
+@Composable
+private fun ToolRow(svc: EveryDayKeysService, c: KbColors) {
     val ids = svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
-    Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxSize().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
         ids.forEach { id -> tool(id)?.let { t -> IconTap(t.icon, t.desc, c, c.text) { svc.feedback(); t.run(svc) } } }
     }
 }
@@ -376,7 +403,7 @@ private fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip,
     val text = item.preview.replace(Regex("\\s+"), " ").trim()
     Row(
         Modifier.weight(if (wide) 1f else 1.15f).padding(horizontal = 3.dp).height(32.dp)
-            .clip(RoundedCornerShape(16.dp)).background(c.panel)
+            .clip(RectangleShape).background(c.panel)
             .clickable { svc.feedback(); svc.pasteClips(listOf(item)) }.padding(start = 10.dp, end = if (wide) 2.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -393,7 +420,7 @@ private fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip,
 @Composable
 private fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
     val pr = svc.progress ?: 0f
-    Column(Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(RoundedCornerShape(12.dp)).background(c.panel).padding(10.dp)) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(RectangleShape).background(c.panel).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(painterResource(R.drawable.ic_clipboard), null, tint = c.accent, modifier = Modifier.size(22.dp))
             Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
@@ -411,7 +438,7 @@ private fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun SearchBox(svc: EveryDayKeysService, c: KbColors, hint: String, modifier: Modifier) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RectangleShape
     Row(
         modifier.height(40.dp).clip(shape).background(c.bg.copy(alpha = 0.5f))
             .border(if (svc.searching) 2.dp else 0.dp, c.accent, shape)
@@ -432,7 +459,7 @@ private fun ClipPanel(svc: EveryDayKeysService, c: KbColors) {
 @Composable
 private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
     Column(
-        Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp),
+        Modifier.fillMaxWidth().height(200.dp).clip(RectangleShape).background(c.panel).padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
         Icon(painterResource(R.drawable.ic_lock), null, tint = c.accent, modifier = Modifier.size(32.dp))
@@ -453,7 +480,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     var selected by remember { mutableStateOf(setOf<Long>()) }
     Column(
         Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp)
-            .clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp)
+            .clip(RectangleShape).background(c.panel).padding(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SearchBox(svc, c, "Search clipboard", Modifier.weight(1f))
@@ -487,7 +514,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
-                        Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(if (isSel) c.accent else c.accent.copy(alpha = 0.15f)),
+                        Modifier.size(36.dp).clip(RectangleShape).background(if (isSel) c.accent else c.accent.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -517,7 +544,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
 private fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
     val ctx = LocalContext.current
     val list by remember { AppDb.get(ctx).snippets().observe() }.collectAsState(initial = emptyList())
-    Column(Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp)) {
+    Column(Modifier.fillMaxWidth().height(230.dp).clip(RectangleShape).background(c.panel).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Text snippets", color = c.text, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 6.dp))
             IconTap(R.drawable.ic_settings, "Manage snippets", c) { svc.openSettings() }
@@ -544,7 +571,7 @@ private fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
     val q = svc.query.trim().lowercase()
     val items = if (q.isEmpty()) (recents + Emojis.all.map { it.first }).distinct()
     else Emojis.all.filter { it.second.contains(q) }.map { it.first }
-    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp).clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp)) {
+    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp).clip(RectangleShape).background(c.panel).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SearchBox(svc, c, "Search emoji", Modifier.weight(1f))
             IconTap(R.drawable.ic_keyboard, "Back to keyboard", c) { svc.closePanel() }
@@ -565,7 +592,7 @@ private fun ConvertPanel(svc: EveryDayKeysService, c: KbColors) {
     val from = cat.units[svc.convFrom.coerceIn(0, cat.units.lastIndex)]
     val to = cat.units[svc.convTo.coerceIn(0, cat.units.lastIndex)]
     val v = svc.convText.replace(",", "").toDoubleOrNull()
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RectangleShape).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconTap(R.drawable.ic_chevron_left, "Previous category", c) { svc.convStep(-1) }
             Text(cat.name, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
@@ -595,7 +622,7 @@ private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbCol
                 val on = i == selected
                 Text(
                     u.name, color = if (on) Color.White else c.text, fontSize = 15.sp, maxLines = 1,
-                    modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) c.accent else c.key)
+                    modifier = Modifier.clip(RectangleShape).background(if (on) c.accent else c.key)
                         .clickable(onClickLabel = "Choose ${u.name}") { onPick(i) }.padding(horizontal = 14.dp, vertical = 12.dp)
                 )
             }
@@ -606,7 +633,7 @@ private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbCol
 @Composable
 private fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val gap = Arrangement.spacedBy(5.dp)
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RectangleShape).background(c.panel).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
             Key(svc, c, Modifier.weight(1f).height(h), "Cursor left", icon = R.drawable.ic_left, repeat = true) { svc.moveCursor(-1) }
             Key(svc, c, Modifier.weight(1f).height(h), "Cursor up", icon = R.drawable.ic_up, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_UP) }

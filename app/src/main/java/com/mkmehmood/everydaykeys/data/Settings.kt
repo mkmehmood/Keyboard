@@ -78,6 +78,7 @@ object Defs {
             Choice("autocorrect", "Autocorrect", listOf("off" to "Off", "mild" to "Mild", "strong" to "Strong"), "mild"),
             Toggle("suggestions", "Word suggestions", true),
             Toggle("nextWord", "Next-word suggestions (learned on this phone)", true),
+            Toggle("autoSpaceSymbols", "Add a space after punctuation and symbols", true),
             Toggle("onlineSuggestions", "Live online suggestions", false),
             Toggle("autoCap", "Auto-capitalization", true),
             Toggle("doubleSpace", "Double-space for a period", true),
@@ -110,7 +111,7 @@ object Defs {
             Slide("dragSens", "Spacebar cursor drag sensitivity", 1, 10, 5)
         )),
         Section("toolbar", "Toolbar", "Choose and order tools", R.drawable.ic_keyboard, listOf(
-            Toggle("showToolbar", "Show toolbar", true),
+            Toggle("showToolbar", "Toolbox button and toolbar", true),
             Multi("toolbarItems", "Tools (use the arrows to reorder)", tools, "clip,snip,voice,translate,undo,redo,cursor,settings")
         )),
         Section("privacy", "Privacy and data", "On this phone unless you use online tools", R.drawable.ic_lock, listOf(

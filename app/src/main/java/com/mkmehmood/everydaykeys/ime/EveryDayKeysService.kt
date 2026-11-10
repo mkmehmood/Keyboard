@@ -97,6 +97,15 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var convLen = 0
     private var learned = 0
 
+    // ---- toolbar, auto space, undo of autocorrect ----
+    var toolbarOpen by mutableStateOf(false)
+    private var autoSpaceOpen = false
+    /** What an autocorrect or a tapped suggestion replaced, so Backspace can put the typed word back. */
+    private class Revert(val original: String, val replacement: String, val tail: String)
+    private var revert: Revert? = null
+    /** A word the user restored with Backspace: it is not autocorrected again. */
+    private var keepAsTyped: String? = null
+
     val langs: List<String>
         get() = prefs.str("languages").split(",").filter { it in Layouts.letters.keys }.ifEmpty { listOf("en") }
     val lang: String get() = langs[langIdx.coerceIn(0, langs.lastIndex)]
@@ -220,8 +229,17 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         val ic = currentInputConnection ?: return
         alts = null
         val c = if (shift != Shift.OFF) raw.uppercase() else raw
-        val sep = c.length == 1 && (c[0].isWhitespace() || c[0] in ".,;:!?)")
-        if (sep && smart) expandAndCorrect(ic)
+        val ch = c.singleOrNull()
+        val wasAutoSpaced = autoSpaceOpen && autoSpaceStillThere(ic)
+        autoSpaceOpen = false
+        revert = null
+        if (ch != null && (ch.isLetter() || ch == '\'')) keepAsTyped = null
+        if (wasAutoSpaced && smart) {
+            if (ch == ' ') { afterTyped(); return }                        // the space was already added for them
+            if (ch != null && AutoSpace.isSymbol(ch)) ic.deleteSurroundingText(1, 0)
+        }
+        val sep = ch != null && (ch.isWhitespace() || ch in ".,;:!?)")
+        val correction = if (sep && smart) expandAndCorrect(ic) else null
         if (c == " " && smart && prefs.bool("doubleSpace")) {
             val now = SystemClock.uptimeMillis()
             val before = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
@@ -231,34 +249,62 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
             lastSpaceAt = now
         }
-        ic.commitText(c, 1)
+        val addSpace = smart && ch != null && prefs.bool("autoSpaceSymbols") &&
+            AutoSpace.shouldSpace(ch, ic.getTextBeforeCursor(1, 0)?.firstOrNull(), ic.getTextAfterCursor(1, 0)?.firstOrNull())
+        val typed = if (addSpace) "$c " else c
+        ic.commitText(typed, 1)
+        autoSpaceOpen = addSpace
+        if (correction != null) revert = Revert(correction.first, correction.second, typed)
         if (shift == Shift.ONCE) shift = Shift.OFF
         afterTyped()
     }
 
+    /** True when the text just before the cursor is a symbol followed by the space we added automatically. */
+    private fun autoSpaceStillThere(ic: InputConnection): Boolean {
+        val b = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+        return b.length == 2 && b[1] == ' ' && AutoSpace.isSymbol(b[0])
+    }
+
     fun onAlt(s: String) {
         if (searching) { query += s; alts = null; return }
+        if (s.length == 1 && AutoSpace.isSymbol(s[0])) { onChar(s); return }
+        autoSpaceOpen = false
+        revert = null
         currentInputConnection?.commitText(s, 1)
         alts = null
         if (shift == Shift.ONCE) shift = Shift.OFF
         afterTyped()
     }
 
-    fun commitText(t: String) { currentInputConnection?.commitText(t, 1); afterTyped() }
+    fun commitText(t: String) {
+        autoSpaceOpen = false
+        revert = null
+        currentInputConnection?.commitText(t, 1)
+        afterTyped()
+    }
 
     private fun afterTyped() { updateAutoCap(); refreshSuggestions() }
 
-    private fun expandAndCorrect(ic: InputConnection) {
-        val before = ic.getTextBeforeCursor(64, 0)?.toString() ?: return
+    /** Expands a snippet or autocorrects the word before the cursor. Returns (typed word, correction) when a word was changed. */
+    private fun expandAndCorrect(ic: InputConnection): Pair<String, String>? {
+        val before = ic.getTextBeforeCursor(64, 0)?.toString() ?: return null
         val tok = before.takeLastWhile { !it.isWhitespace() }
-        snippetMap[tok]?.let { ic.deleteSurroundingText(tok.length, 0); ic.commitText(it, 1); return }
+        snippetMap[tok]?.let { ic.deleteSurroundingText(tok.length, 0); ic.commitText(it, 1); return null }
         val word = before.takeLastWhile { it.isLetter() || it == '\'' }
         val level = when (prefs.str("autocorrect")) { "mild" -> 1; "strong" -> 2; else -> 0 }
+        val keep = word.equals(keepAsTyped, ignoreCase = true)
+        keepAsTyped = null
         var finalWord = word
-        if (level > 0 && lang == "en" && word.isNotEmpty()) {
-            Suggest.correct(word, level)?.let { ic.deleteSurroundingText(word.length, 0); ic.commitText(it, 1); finalWord = it }
+        var correction: Pair<String, String>? = null
+        if (level > 0 && lang == "en" && word.isNotEmpty() && !keep) {
+            Suggest.correct(word, level)?.let {
+                ic.deleteSurroundingText(word.length, 0); ic.commitText(it, 1)
+                finalWord = it
+                correction = word to it
+            }
         }
         if (lang == "en") learnPair(before.dropLast(word.length), finalWord)
+        return correction
     }
 
     /** Remembers that [word] followed the word before it, for next-word suggestions. Only runs in normal text fields. */
@@ -274,6 +320,23 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     fun onBackspace() {
         if (searching) { query = query.dropLast(1); return }
+        autoSpaceOpen = false
+        val r = revert
+        revert = null
+        val ic = currentInputConnection
+        if (r != null && ic != null && ic.getSelectedText(0).isNullOrEmpty()) {
+            val n = r.replacement.length + r.tail.length
+            if (ic.getTextBeforeCursor(n, 0)?.toString() == r.replacement + r.tail) {
+                // Put back the word as it was typed, and do not correct it again.
+                ic.beginBatchEdit()
+                ic.deleteSurroundingText(n, 0)
+                ic.commitText(r.original, 1)
+                ic.endBatchEdit()
+                keepAsTyped = r.original
+                afterTyped()
+                return
+            }
+        }
         sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
         afterTyped()
     }
@@ -281,6 +344,9 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     fun onEnter() {
         if (searching) { searching = false; return }
         val ic = currentInputConnection ?: return
+        if (autoSpaceOpen && autoSpaceStillThere(ic)) ic.deleteSurroundingText(1, 0)
+        autoSpaceOpen = false
+        revert = null
         if (smart) expandAndCorrect(ic)
         val opts = info?.imeOptions ?: 0
         val action = opts and EditorInfo.IME_MASK_ACTION
@@ -346,6 +412,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         ic.deleteSurroundingText(w.length, 0)
         ic.commitText("$s ", 1)
         if (lang == "en") learnPair(b.dropLast(w.length), s)
+        autoSpaceOpen = false
+        revert = if (w.isNotEmpty() && !w.equals(s, ignoreCase = true)) Revert(w, s, " ") else null
         afterTyped()
     }
 
@@ -355,8 +423,12 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     // ---- editing tools ----
-    fun moveCursor(dir: Int) = sendDownUpKeyEvents(if (dir < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT)
-    fun sendKey(code: Int) = sendDownUpKeyEvents(code)
+    fun moveCursor(dir: Int) {
+        autoSpaceOpen = false
+        revert = null
+        sendDownUpKeyEvents(if (dir < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT)
+    }
+    fun sendKey(code: Int) { autoSpaceOpen = false; revert = null; sendDownUpKeyEvents(code) }
     fun selectAll() { currentInputConnection?.performContextMenuAction(android.R.id.selectAll) }
     fun copy() { currentInputConnection?.performContextMenuAction(android.R.id.copy) }
     fun cut() { currentInputConnection?.performContextMenuAction(android.R.id.cut) }
