@@ -62,6 +62,7 @@ object Defs {
         )),
         Section("clip", "Clipboard", "Unlimited size, history on", R.drawable.ic_clipboard, listOf(
             Toggle("clipEnabled", "Save clipboard history", true),
+            Toggle("clipPreview", "Tap a clip to preview it before pasting", true),
             Choice("retention", "Keep history", listOf("forever" to "Forever", "1" to "1 day", "7" to "1 week", "30" to "1 month"), "forever"),
             Toggle("skipSensitive", "Skip passwords and sensitive fields", true),
             Toggle("clipLock", "Lock history with fingerprint or screen lock", false),
@@ -72,9 +73,13 @@ object Defs {
         Section("snippets", "Text snippets", "Shortcuts such as ;addr", R.drawable.ic_snippet, listOf(
             Action("snippets", "Manage snippets", "Add, edit, delete, set shortcuts")
         )),
-        Section("smart", "Smart typing", "Autocorrect, suggestions, on-device", R.drawable.ic_sparkle, listOf(
+        Section("smart", "Smart typing", "Autocorrect, smart suggestions, on-device", R.drawable.ic_sparkle, listOf(
             Choice("autocorrect", "Autocorrect", listOf("off" to "Off", "mild" to "Mild", "strong" to "Strong"), "mild"),
             Toggle("suggestions", "Word suggestions", true),
+            Choice("suggestCount", "Suggestions shown", listOf("2" to "2", "3" to "3", "4" to "4"), "3"),
+            Toggle("contextRank", "Rank by the previous word", true),
+            Toggle("typoSuggest", "Suggest fixes for typos", true),
+            Toggle("learnWords", "Learn words I use often", true),
             Toggle("nextWord", "Next-word suggestions (learned on this phone)", true),
             Toggle("onlineSuggestions", "Live online suggestions", false),
             Toggle("autoCap", "Auto-capitalization", true),

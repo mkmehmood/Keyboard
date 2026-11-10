@@ -318,6 +318,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
             Suggest.correct(word, level)?.let { ic.deleteSurroundingText(word.length, 0); ic.commitText(it, 1); finalWord = it; result = word to it }
         }
         if (lang == "en") learnPair(before.dropLast(word.length), finalWord)
+        if (lang == "en" && result == null && prefs.bool("learnWords")) Suggest.noteTyped(finalWord)
         return result
     }
 
@@ -397,23 +398,30 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     fun refreshSuggestions() {
         onlineJob?.cancel()
         if (!smart || !prefs.bool("suggestions") || lang != "en") { suggestions = emptyList(); return }
-        val b = currentInputConnection?.getTextBeforeCursor(32, 0)?.toString().orEmpty()
+        val n = prefs.int("suggestCount").coerceIn(2, 4)
+        val b = currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
         val w = b.takeLastWhile { it.isLetter() || it == '\'' }
+        val head = b.dropLast(w.length)
+        val prev = if (head.endsWith(" ")) head.trimEnd().takeLastWhile { it.isLetter() || it == '\'' } else ""
         if (w.isEmpty()) {
-            val prev = if (prefs.bool("nextWord") && b.endsWith(" ")) b.trimEnd().takeLastWhile { it.isLetter() || it == '\'' } else ""
-            suggestions = if (prev.isEmpty()) emptyList() else Bigrams.next(prev, 3)
+            var next = if (prefs.bool("nextWord") && prev.isNotEmpty()) Bigrams.next(prev, n) else emptyList()
+            // at the start of a sentence the suggested word needs a capital too
+            if (shift != Shift.OFF) next = next.map { it.replaceFirstChar { c -> c.uppercase() } }
+            suggestions = next
             if (suggestions.isNotEmpty() && alts == null) toolsOpen = false
             return
         }
-        val local = Suggest.complete(w, 6)
-        suggestions = local.take(3)
+        // words that usually follow the previous word are tried first, then the ones you use most
+        val ctx = if (prefs.bool("contextRank") && prev.isNotEmpty()) Bigrams.next(prev, 40) else emptyList()
+        val local = Suggest.suggest(w, ctx, n + 2, prefs.bool("typoSuggest"))
+        suggestions = local.take(n)
         if (suggestions.isNotEmpty()) toolsOpen = false
         if (w.length >= 2 && prefs.bool("onlineSuggestions")) {
             onlineJob = scope.launch {
                 kotlinx.coroutines.delay(120)
                 val online = OnlineSuggest.fetch(w).map { Suggest.matchCaseOf(w, it) }.filter { it.lowercase() != w.lowercase() }
                 if (online.isEmpty()) return@launch
-                suggestions = (local.take(2) + online + local.drop(2)).distinctBy { it.lowercase() }.take(3)
+                suggestions = (local.take(n - 1) + online + local.drop(n - 1)).distinctBy { it.lowercase() }.take(n)
             }
         }
     }
@@ -425,6 +433,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         ic.deleteSurroundingText(w.length, 0)
         ic.commitText("$s ", 1)
         if (lang == "en") learnPair(b.dropLast(w.length), s)
+        if (lang == "en" && prefs.bool("learnWords")) Suggest.noteTyped(s)
         afterTyped()
         lastCorr = if (w.isNotEmpty()) Corr(w, s, " ") else null
         suggestSpaced = true

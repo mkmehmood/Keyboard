@@ -75,12 +75,14 @@ object Bigrams {
     fun next(prev: String, n: Int = 3): List<String> = model.next(prev, n)
 
     fun save(ctx: Context) {
+        Suggest.saveUsage(ctx)
         if (!dirty) return
         dirty = false
         runCatching { file(ctx).writeText(model.serialize()) }
     }
 
     fun clear(ctx: Context) {
+        Suggest.clearUsage(ctx)
         model.clear()
         dirty = false
         file(ctx).delete()

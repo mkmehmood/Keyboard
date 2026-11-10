@@ -18,6 +18,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -682,10 +684,16 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     val list by remember(svc.query) { svc.clips.observe(svc.query) }.collectAsState(initial = emptyList<Clip>())
     val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf(setOf<Long>()) }
+    var preview by remember { mutableStateOf<Clip?>(null) }
     Column(
         Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp)
             .clip(RoundedCornerShape(14.dp)).background(c.panel).padding(8.dp)
     ) {
+        val pv = preview
+        if (pv != null) {
+            ClipPreview(svc, c, pv, onBack = { preview = null }, onPaste = { svc.pasteClips(listOf(pv)); preview = null })
+            return@Column
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SearchBox(svc, c, "Search clipboard", Modifier.weight(1f))
             if (selected.isNotEmpty()) IconTap(R.drawable.ic_add, "Merge selected items into one paste", c, c.accent) {
@@ -712,6 +720,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                             onLongClick = { selected = if (isSel) selected - clip.id else selected + clip.id },
                             onClick = {
                                 if (selected.isNotEmpty()) selected = if (isSel) selected - clip.id else selected + clip.id
+                                else if (svc.prefs.bool("clipPreview")) preview = clip
                                 else svc.pasteClips(listOf(clip))
                             })
                         .padding(vertical = 4.dp),
@@ -741,6 +750,32 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
             Icon(painterResource(R.drawable.ic_lock), null, tint = c.sub, modifier = Modifier.size(14.dp))
             Text("No size limit. Stays on this phone.", color = c.sub, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
         }
+    }
+}
+
+/** Shows the whole clip, scrollable, so it can be checked before it goes into the text field. */
+@Composable
+private fun ColumnScope.ClipPreview(svc: EveryDayKeysService, c: KbColors, clip: Clip, onBack: () -> Unit, onPaste: () -> Unit) {
+    val limit = 20_000
+    var body by remember(clip.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(clip.id) { body = runCatching { svc.clips.text(clip) }.getOrDefault(clip.preview) }
+    val text = body
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        IconTap(R.drawable.ic_close, "Back to the clipboard list", c) { onBack() }
+        Text(
+            if (text == null) "Preview" else "Preview, %,d characters".format(text.length), color = c.text, fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+        )
+        Key(svc, c, Modifier.width(96.dp).height(40.dp), "Paste this item", label = "Paste", tone = 2) { onPaste() }
+    }
+    Box(
+        Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).background(c.key.copy(alpha = 0.5f))
+            .verticalScroll(rememberScrollState()).padding(10.dp)
+    ) {
+        Text(if (text == null) "Loading..." else text.take(limit), color = c.text, fontSize = 14.sp)
+    }
+    if (text != null && text.length > limit) {
+        Text("Showing the first %,d characters. The whole item is pasted.".format(limit), color = c.sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
