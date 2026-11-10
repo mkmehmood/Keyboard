@@ -34,11 +34,12 @@ import com.mkmehmood.everydaykeys.data.*
 import com.mkmehmood.everydaykeys.ui.SettingsActivity
 import com.mkmehmood.everydaykeys.ui.UnlockActivity
 import com.mkmehmood.everydaykeys.ui.VoiceActivity
+import com.mkmehmood.everydaykeys.R
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 
 enum class Mode { LETTERS, NUMPAD, SYM1, SYM2, SYM3, SYM4 }
-enum class Panel { NONE, CLIP, SNIPPETS, EMOJI, CURSOR, CONVERT }
+enum class Panel { NONE, CLIP, SNIPPETS, EMOJI, CURSOR, CONVERT, QUICK }
 enum class Shift { OFF, ONCE, LOCK }
 
 class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
@@ -94,6 +95,16 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var onlineJob: kotlinx.coroutines.Job? = null
     var alts by mutableStateOf<List<String>?>(null)
     var progress by mutableStateOf<Float?>(null)
+
+    /** A short confirmation (Copied, Pasted, Undo...) shown over the keyboard for a moment. */
+    class Notice(val icon: Int, val text: String)
+    var notice by mutableStateOf<Notice?>(null)
+    private var noticeJob: Job? = null
+    fun showNotice(icon: Int, text: String) {
+        notice = Notice(icon, text)
+        noticeJob?.cancel()
+        noticeJob = scope.launch { kotlinx.coroutines.delay(1600); notice = null }
+    }
     var searching by mutableStateOf(false)
     var query by mutableStateOf("")
 
@@ -502,9 +513,22 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     // ---- editing tools ----
     fun moveCursor(dir: Int) = sendDownUpKeyEvents(if (dir < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT)
     fun sendKey(code: Int) = sendDownUpKeyEvents(code)
-    fun selectAll() { currentInputConnection?.performContextMenuAction(android.R.id.selectAll) }
-    fun copy() { currentInputConnection?.performContextMenuAction(android.R.id.copy) }
-    fun cut() { currentInputConnection?.performContextMenuAction(android.R.id.cut) }
+    fun selectAll() {
+        currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
+        showNotice(R.drawable.ic_select_all, "Selected all")
+    }
+    fun copy() {
+        val ic = currentInputConnection ?: return
+        if (ic.getSelectedText(0).isNullOrEmpty()) { showNotice(R.drawable.ic_info, "Select some text first"); return }
+        ic.performContextMenuAction(android.R.id.copy)
+        showNotice(R.drawable.ic_copy, "Copied")
+    }
+    fun cut() {
+        val ic = currentInputConnection ?: return
+        if (ic.getSelectedText(0).isNullOrEmpty()) { showNotice(R.drawable.ic_info, "Select some text first"); return }
+        ic.performContextMenuAction(android.R.id.cut)
+        showNotice(R.drawable.ic_cut, "Cut")
+    }
 
     /** Paste the newest history item through the chunked path, so size never matters. */
     fun paste() {
@@ -522,8 +546,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         ic.sendKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0, meta))
         ic.sendKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0, meta))
     }
-    fun undo() = ctrl(KeyEvent.KEYCODE_Z, false)
-    fun redo() = ctrl(KeyEvent.KEYCODE_Z, true)
+    fun undo() { ctrl(KeyEvent.KEYCODE_Z, false); showNotice(R.drawable.ic_undo, "Undo") }
+    fun redo() { ctrl(KeyEvent.KEYCODE_Z, true); showNotice(R.drawable.ic_redo, "Redo") }
 
     fun pasteClips(list: List<Clip>) {
         if (list.isEmpty()) return
@@ -538,11 +562,15 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
             try {
                 ChunkedPaste.run(JoinReader(list.map { c -> { c.open() } }), total, chunk, delayMs, { currentInputConnection }) { p -> if (show) progress = p }
             } finally { progress = null }
+            showNotice(R.drawable.ic_paste, if (total > 200) "Pasted %,d characters".format(total) else "Pasted")
             afterTyped()
         }
     }
 
     fun cancelPaste() { pasteJob?.cancel(); progress = null }
+
+    /** Writes a setting from the quick settings panel; the keyboard picks it up from the settings flow straight away. */
+    fun setPref(key: String, value: String) { scope.launch { SettingsRepo.set(this@EveryDayKeysService, key, value) } }
 
     fun commitEmoji(e: String) {
         touch(); resetTypingState()

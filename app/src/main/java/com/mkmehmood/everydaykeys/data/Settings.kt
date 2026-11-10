@@ -47,7 +47,7 @@ class Section(val id: String, val title: String, val desc: String, val icon: Int
 object Defs {
     private val tools = listOf(
         "clip" to "Clipboard", "snip" to "Snippets", "voice" to "Voice typing", "translate" to "Translate",
-        "style" to "Switch layout style", "undo" to "Undo", "redo" to "Redo", "cursor" to "Cursor and edit keys", "convert" to "Unit converter", "settings" to "Settings"
+        "style" to "Switch layout style", "undo" to "Undo", "redo" to "Redo", "cursor" to "Cursor and edit keys", "convert" to "Unit converter", "quick" to "Quick settings", "settings" to "Settings"
     )
 
     val sections: List<Section> = listOf(

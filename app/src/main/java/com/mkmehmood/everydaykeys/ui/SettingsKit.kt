@@ -30,12 +30,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mkmehmood.everydaykeys.R
+import com.mkmehmood.everydaykeys.design.*
 
 // Shared look for every settings screen, taken from the Everyday Keys design board:
 // soft page background, white grouped cards with hairline borders, teal icon tiles and controls.
 
-internal val CardShape = RoundedCornerShape(16.dp)
-internal val FieldShape = RoundedCornerShape(12.dp)
+internal val CardShape = Dim.Card
+internal val FieldShape = Dim.Field
 
 @Composable
 internal fun Ic(id: Int, desc: String? = null, tint: Color = LocalContentColor.current, size: Dp = 24.dp) =
@@ -51,25 +52,15 @@ internal fun SettingsTopBar(title: String, onBack: () -> Unit) {
 
 /** White card with a hairline border. Put rows inside it and separate them with [RowDivider]. */
 @Composable
-internal fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier.fillMaxWidth().clip(CardShape).background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CardShape),
-        content = content
-    )
-}
+internal fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) =
+    DsGroup(settingsPalette(), modifier, content)
 
 @Composable
-internal fun RowDivider() = HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+internal fun RowDivider() = DsDivider(settingsPalette())
 
 /** Small rounded square with a teal icon, used at the start of rows. */
 @Composable
-internal fun Tile(icon: Int, size: Dp = 34.dp) {
-    Box(
-        Modifier.size(size).clip(RoundedCornerShape(9.dp)).background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center
-    ) { Ic(icon, null, MaterialTheme.colorScheme.primary, 20.dp) }
-}
+internal fun Tile(icon: Int, size: Dp = Dim.TileSize) = DsTile(settingsPalette(), icon, size)
 
 @Composable
 internal fun SearchBox(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
@@ -130,33 +121,15 @@ internal fun PreviewField(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun PrimaryButton(text: String, icon: Int? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Button(onClick, modifier.heightIn(min = 48.dp), shape = FieldShape) {
-        if (icon != null) { Ic(icon, null, size = 18.dp); Spacer(Modifier.width(8.dp)) }
-        Text(text, fontWeight = FontWeight.SemiBold)
-    }
-}
+internal fun PrimaryButton(text: String, icon: Int? = null, modifier: Modifier = Modifier, onClick: () -> Unit) =
+    DsButton(settingsPalette(), text, icon, true, modifier, 48.dp, onClick)
 
 @Composable
-internal fun SecondaryButton(text: String, icon: Int? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    OutlinedButton(
-        onClick, modifier.heightIn(min = 48.dp), shape = FieldShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-    ) {
-        if (icon != null) { Ic(icon, null, size = 18.dp); Spacer(Modifier.width(8.dp)) }
-        Text(text, fontWeight = FontWeight.SemiBold)
-    }
-}
+internal fun SecondaryButton(text: String, icon: Int? = null, modifier: Modifier = Modifier, onClick: () -> Unit) =
+    DsButton(settingsPalette(), text, icon, false, modifier, 48.dp, onClick)
 
 @Composable
-internal fun settingsSwitchColors(): SwitchColors {
-    val cs = MaterialTheme.colorScheme
-    return SwitchDefaults.colors(
-        checkedThumbColor = Color.White, checkedTrackColor = cs.primary, checkedBorderColor = cs.primary,
-        uncheckedThumbColor = Color.White, uncheckedTrackColor = cs.outline, uncheckedBorderColor = cs.outline
-    )
-}
+internal fun settingsSwitchColors(): SwitchColors = dsSwitchColors(settingsPalette())
 
 @Composable
 internal fun settingsSliderColors(): SliderColors {

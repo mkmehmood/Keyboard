@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mkmehmood.everydaykeys.R
+import com.mkmehmood.everydaykeys.design.*
 import com.mkmehmood.everydaykeys.data.AppDb
 import com.mkmehmood.everydaykeys.data.Calc
 import com.mkmehmood.everydaykeys.data.Clip
@@ -48,21 +49,21 @@ import kotlinx.coroutines.launch
 // uses the same look as the Settings screens: a header with a back arrow, grouped cards with hairline borders,
 // rounded tiles with an accent icon, 12dp fields and buttons.
 
-internal val PanelCard = RoundedCornerShape(16.dp)
-internal val PanelField = RoundedCornerShape(12.dp)
-private val PanelTileShape = RoundedCornerShape(9.dp)
+internal val PanelCard = Dim.Card
+internal val PanelField = Dim.Field
 
 /** The thin border colour used on cards and fields. */
-private fun hair(c: KbColors) = c.sub.copy(alpha = 0.30f)
+/** The keyboard's colours expressed as the shared design palette, so panels use the same pieces as Settings. */
+internal fun KbColors.palette() = Palette(
+    surface = panel, text = text, sub = sub, accent = accent, onAccent = onAccent,
+    hairline = sub.copy(alpha = 0.30f), tile = accent.copy(alpha = 0.15f), off = sub.copy(alpha = 0.55f)
+)
+
+private fun hair(c: KbColors) = c.palette().hairline
 
 /** Small rounded square with an accent icon, used at the start of rows and for the tool icons. */
 @Composable
-internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean = false) {
-    Box(
-        Modifier.size(size).clip(PanelTileShape).background(if (filled) c.accent else c.accent.copy(alpha = 0.15f)),
-        contentAlignment = Alignment.Center
-    ) { Icon(painterResource(icon), null, tint = if (filled) c.onAccent else c.accent, modifier = Modifier.size(size * 0.6f)) }
-}
+internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean = false) = DsTile(c.palette(), icon, size, filled)
 
 /** A toolbar icon: the tile is the tap target. */
 @Composable
@@ -87,12 +88,10 @@ internal fun PanelHeader(c: KbColors, title: String, backDesc: String, onBack: (
 
 /** Card with a hairline border. Put rows inside it and separate them with [PanelDivider]. */
 @Composable
-internal fun PanelGroup(c: KbColors, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(PanelCard).background(c.panel).border(1.dp, hair(c), PanelCard), content = content)
-}
+internal fun PanelGroup(c: KbColors, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) = DsGroup(c.palette(), modifier, content)
 
 @Composable
-internal fun PanelDivider(c: KbColors) = Box(Modifier.fillMaxWidth().height(1.dp).background(hair(c)))
+internal fun PanelDivider(c: KbColors) = DsDivider(c.palette())
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -133,20 +132,10 @@ internal fun PanelSearch(svc: EveryDayKeysService, c: KbColors, hint: String, mo
     }
 }
 
-/** Filled (primary) or outlined button, 44dp tall. */
+/** Filled (primary) or outlined button, 44dp tall (Settings uses 48dp). */
 @Composable
-internal fun PanelButton(svc: EveryDayKeysService, c: KbColors, text: String, icon: Int?, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val fg = if (primary) c.onAccent else c.accent
-    Row(
-        modifier.height(44.dp).clip(PanelField).background(if (primary) c.accent else Color.Transparent)
-            .then(if (primary) Modifier else Modifier.border(1.dp, hair(c), PanelField))
-            .clickable(role = Role.Button) { svc.feedback(); onClick() }.padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (icon != null) { Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
-        Text(text, color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
+internal fun PanelButton(svc: EveryDayKeysService, c: KbColors, text: String, icon: Int?, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) =
+    DsButton(c.palette(), text, icon, primary, modifier, 44.dp) { svc.feedback(); onClick() }
 
 @Composable
 internal fun PanelChip(c: KbColors, text: String, selected: Boolean, desc: String, onClick: () -> Unit) {
@@ -160,12 +149,11 @@ internal fun PanelChip(c: KbColors, text: String, selected: Boolean, desc: Strin
 
 /** Small grey note under a card, with an icon. */
 @Composable
-internal fun PanelNote(c: KbColors, icon: Int, text: String) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painterResource(icon), null, tint = c.sub, modifier = Modifier.size(14.dp))
-        Text(text, color = c.sub, fontSize = 12.5.sp, maxLines = 2, modifier = Modifier.padding(start = 6.dp))
-    }
-}
+internal fun PanelNote(c: KbColors, icon: Int, text: String) = DsNote(c.palette(), icon, text)
+
+/** Brief confirmation over the keyboard after copy, cut, paste, select all, undo or redo. It never blocks touches. */
+@Composable
+internal fun NoticePill(c: KbColors, n: EveryDayKeysService.Notice) = DsNotice(c.palette(), n.icon, n.text)
 
 @Composable
 internal fun PanelEmpty(c: KbColors, icon: Int, text: String) {
@@ -466,6 +454,36 @@ internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
                     Key(svc, c, key.weight(1f), "Cut", icon = R.drawable.ic_cut, tone = 1) { svc.cut() }
                     Key(svc, c, key.weight(1f), "Paste latest history item", icon = R.drawable.ic_paste, tone = 1) { svc.paste() }
                 }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- quick settings
+
+@Composable
+private fun QuickRow(svc: EveryDayKeysService, c: KbColors, icon: Int, title: String, sub: String, key: String, on: String = "true", off: String = "false") {
+    DsToggleRow(c.palette(), icon, title, sub, svc.prefs.str(key) != off) { v -> svc.feedback(); svc.setPref(key, if (v) on else off) }
+}
+
+/** The switches people reach for while typing, in the same rows and switches as the Settings screens. */
+@Composable
+internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
+    Column(Modifier.fillMaxWidth().height(270.dp).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        PanelHeader(c, "Quick settings", "Back to keyboard", { svc.closePanel() }) {
+            IconTap(R.drawable.ic_settings, "All settings", c, c.sub) { svc.openSettings() }
+        }
+        PanelGroup(c, Modifier.weight(1f)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                QuickRow(svc, c, R.drawable.ic_sparkle, "Word suggestions", "Suggestions above the keys", "suggestions")
+                PanelDivider(c)
+                QuickRow(svc, c, R.drawable.ic_check, "Autocorrect", "Fix typos when you press space", "autocorrect", on = "mild", off = "off")
+                PanelDivider(c)
+                QuickRow(svc, c, R.drawable.ic_vibration, "Vibration", "Buzz on each key press", "vibrate")
+                PanelDivider(c)
+                QuickRow(svc, c, R.drawable.ic_sound, "Key sound", "Click on each key press", "sound")
+                PanelDivider(c)
+                QuickRow(svc, c, R.drawable.ic_clipboard, "Clipboard history", "Save everything you copy", "clipEnabled")
             }
         }
     }
