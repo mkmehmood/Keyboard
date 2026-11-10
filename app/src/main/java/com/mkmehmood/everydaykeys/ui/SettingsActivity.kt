@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -57,7 +58,11 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val scheme = if (isSystemInDarkTheme()) darkColorScheme(primary = Color(0xFF2DD4BF), onPrimary = Color.Black, primaryContainer = Color(0xFF134E4A), onPrimaryContainer = Color(0xFFCCFBF1))
-    else lightColorScheme(primary = Color(0xFF0F766E), primaryContainer = Color(0xFFDDF0EE), onPrimaryContainer = Color(0xFF0B3D39), background = Color(0xFFF1F4F8), surface = Color.White)
+    else lightColorScheme(
+        primary = Color(0xFF0E7C7B), primaryContainer = Color(0xFFDDF1F0), onPrimaryContainer = Color(0xFF0B3D39),
+        background = Color(0xFFF7F9FB), surface = Color.White, onSurface = Color(0xFF101C28), onSurfaceVariant = Color(0xFF4A5A69),
+        outlineVariant = Color(0xFFD3DBE2)
+    )
     MaterialTheme(colorScheme = scheme) { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, content = content) }
 }
 
@@ -136,17 +141,28 @@ fun HomeScreen(nav: NavController) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (q.isBlank()) {
                 item { StatusCard(ctx, status.first, status.second) }
-                items(Defs.sections) { s ->
-                    Card(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { nav.navigate("s/${s.id}") }) {
-                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                                Ic(s.icon, null, MaterialTheme.colorScheme.primary)
+                item {
+                    // One grouped card with hairline dividers, matching the design board.
+                    Card(
+                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Defs.sections.forEachIndexed { i, s ->
+                            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Row(
+                                Modifier.fillMaxWidth().clickable { nav.navigate("s/${s.id}") }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                                    Ic(s.icon, null, MaterialTheme.colorScheme.primary, 20.dp)
+                                }
+                                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                                    Text(s.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                                    Text(s.desc, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Ic(R.drawable.ic_chevron, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = 20.dp)
                             }
-                            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                                Text(s.title, fontWeight = FontWeight.Medium)
-                                Text(s.desc, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Ic(R.drawable.ic_chevron)
                         }
                     }
                 }

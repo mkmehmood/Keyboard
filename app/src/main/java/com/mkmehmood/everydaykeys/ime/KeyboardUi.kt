@@ -25,7 +25,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -50,10 +54,10 @@ class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color
     companion object {
         fun of(dark: Boolean, accentName: String): KbColors {
             val acc = when (accentName) {
-                "blue" -> Color(0xFF2563EB); "purple" -> Color(0xFF7C3AED); "orange" -> Color(0xFFC2410C); else -> Color(0xFF0F766E)
+                "blue" -> Color(0xFF2563EB); "purple" -> Color(0xFF7C3AED); "orange" -> Color(0xFFC2410C); else -> Color(0xFF0E7C7B)
             }
             return if (dark) KbColors(Color(0xFF161C24), Color(0xFF2E3744), Color(0xFF232B36), Color(0xFFE8ECF1), Color(0xFF9AA7B6), acc, Color(0xFF1E252E))
-            else KbColors(Color(0xFFD4DAE3), Color.White, Color(0xFFB9C2CE), Color(0xFF111827), Color(0xFF5B6675), acc, Color(0xFFF4F6F9))
+            else KbColors(Color(0xFFD5DCE3), Color.White, Color(0xFFBFC9D3), Color(0xFF101C28), Color(0xFF4A5A69), acc, Color.White)
         }
     }
 }
@@ -107,6 +111,11 @@ fun Key(
     val fg = if (tone == 2 || active) Color.White else c.text
     val shape = RoundedCornerShape(8.dp)
     var m = modifier.clip(shape).background(if (pressed) base.copy(alpha = 0.65f) else base)
+        .drawBehind {
+            // 1dp lower edge gives each key a slight raised look.
+            val e = 1.dp.toPx()
+            drawRect(Color.Black.copy(alpha = 0.2f), topLeft = Offset(0f, size.height - e), size = Size(size.width, e))
+        }
     if (p.bool("borders")) m = m.border(1.dp, c.sub.copy(alpha = 0.5f), shape)
     m = m
         .semantics { contentDescription = desc; role = Role.Button; onClick(label = desc) { tap(); true } }
@@ -141,7 +150,7 @@ fun Key(
         }
     Box(m, contentAlignment = Alignment.Center) {
         if (icon != null) Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(22.dp))
-        else if (label != null) Text(label, color = fg, fontSize = p.int("fontSize").sp, maxLines = 1)
+        else if (label != null) Text(label, color = fg, fontSize = p.int("fontSize").sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -300,7 +309,7 @@ private fun tool(id: String): Tool? = when (id) {
 private fun Toolbar(svc: EveryDayKeysService, c: KbColors) {
     val ids = svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
     Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-        ids.forEach { id -> tool(id)?.let { t -> IconTap(t.icon, t.desc, c, c.sub) { svc.feedback(); t.run(svc) } } }
+        ids.forEach { id -> tool(id)?.let { t -> IconTap(t.icon, t.desc, c, c.text) { svc.feedback(); t.run(svc) } } }
     }
 }
 
@@ -314,9 +323,10 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     if (items.isEmpty() && pending == null) return
     Row(Modifier.fillMaxWidth().height(38.dp), verticalAlignment = Alignment.CenterVertically) {
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
-        items.forEach { s ->
+        items.forEachIndexed { i, s ->
+            if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.sub.copy(alpha = 0.4f)))
             Text(
-                s, color = c.text, fontSize = 18.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                s, color = c.text, fontSize = 18.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) }.padding(vertical = 8.dp)
             )
         }
