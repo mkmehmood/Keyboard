@@ -260,22 +260,18 @@ private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
-    val all by remember(svc.query) { svc.clips.observe(svc.query) }.collectAsState(initial = emptyList<Clip>())
-    var filter by remember { mutableStateOf(0) }
-    val list = when (filter) {
-        1 -> all.filter { it.pinned }
-        2 -> all.filter { it.preview.startsWith("http") }
-        3 -> all.filter { it.filePath != null }
-        else -> all
-    }
+    val list by remember(svc.query) { svc.clips.observe(svc.query) }.collectAsState(initial = emptyList<Clip>())
     val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var preview by remember { mutableStateOf<Clip?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     // the "Clear all?" button disarms itself after a few seconds so a stray tap later does nothing
     LaunchedEffect(confirmClear) { if (confirmClear) { delay(3000); confirmClear = false } }
+    // the preview takes most of the screen so long clips can be read; the list keeps the standard panel height
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    val previewH = (screenH - 140).coerceIn(270, 640).dp
     Column(
-        Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else PanelHeight).padding(2.dp),
+        Modifier.fillMaxWidth().height(if (preview != null) previewH else if (svc.searching) 150.dp else PanelHeight).padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         val pv = preview
@@ -310,15 +306,9 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                 }
             }
             PanelSearch(svc, c, "Search clipboard", Modifier.fillMaxWidth())
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val counts = listOf(0, all.count { it.pinned }, all.count { it.preview.startsWith("http") }, all.count { it.filePath != null })
-                itemsIndexed(listOf("All", "Pinned", "Links", "Large")) { i, name ->
-                    PanelChip(c, if (i > 0 && counts[i] > 0) "$name ${counts[i]}" else name, i == filter, "Show $name items") { filter = i }
-                }
-            }
         }
         PanelGroup(c, Modifier.weight(1f)) {
-            if (list.isEmpty()) PanelEmpty(c, R.drawable.ic_clipboard, when { svc.query.isNotEmpty() -> "No matches"; filter != 0 -> "No items in this filter"; else -> "Nothing copied yet. Copy some text and it shows up here. No size limit, and it stays on this phone." })
+            if (list.isEmpty()) PanelEmpty(c, R.drawable.ic_clipboard, when { svc.query.isNotEmpty() -> "No matches"; else -> "Nothing copied yet. Copy some text and it shows up here. No size limit, and it stays on this phone." })
             else LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(list, key = { _, clip -> clip.id }) { i, clip ->
                     val isSel = clip.id in selected
@@ -370,7 +360,7 @@ private fun ColumnScope.ClipPreview(svc: EveryDayKeysService, c: KbColors, clip:
     }
     PanelGroup(c, Modifier.weight(1f)) {
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-            Text(if (text == null) "Loading..." else text.take(limit), color = c.text, fontSize = 14.sp)
+            Text(if (text == null) "Loading..." else text.take(limit), color = c.text, fontSize = 15.sp)
         }
     }
     if (text != null) PanelNote(
