@@ -619,6 +619,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         afterTyped()
     }
     fun closePanel() { panel = Panel.NONE; searching = false; query = "" }
+    /** A tool icon opens its panel, and tapping the same icon again closes it, since panels have no back arrow. */
+    fun togglePanel(p: Panel) { if (panel == p) closePanel() else openPanel(p) }
 
     private fun launch(i: Intent) = startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     fun openSettings() = launch(Intent(this, SettingsActivity::class.java))

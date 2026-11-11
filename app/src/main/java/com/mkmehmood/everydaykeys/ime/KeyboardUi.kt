@@ -154,7 +154,7 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
             Column(Modifier.fillMaxWidth()) {
                 if (svc.panel == Panel.NONE && svc.mode != Mode.NUMPAD) Strip(svc, c)
                 // the number pad has no suggestions, only the tool icons
-                else if (p.bool("showToolbar")) Toolbar(svc, c)
+                else if (p.bool("showToolbar") || svc.panel != Panel.NONE) Toolbar(svc, c)
             }
             when (svc.panel) {
                 Panel.NONE -> Box(Modifier.onSizeChanged { svc.keysHeightPx = it.height }) { Keys(svc, c, h) }
@@ -533,15 +533,15 @@ private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 private class Tool(val icon: Int, val desc: String, val run: (EveryDayKeysService) -> Unit)
 
 private fun tool(id: String): Tool? = when (id) {
-    "clip" -> Tool(R.drawable.ic_clipboard, "Clipboard") { it.openPanel(Panel.CLIP) }
-    "snip" -> Tool(R.drawable.ic_snippet, "Text snippets") { it.openPanel(Panel.SNIPPETS) }
+    "clip" -> Tool(R.drawable.ic_clipboard, "Clipboard") { it.togglePanel(Panel.CLIP) }
+    "snip" -> Tool(R.drawable.ic_snippet, "Text snippets") { it.togglePanel(Panel.SNIPPETS) }
     "voice" -> Tool(R.drawable.ic_mic, "Voice typing") { it.startVoice() }
     "translate" -> Tool(R.drawable.ic_translate, "Translate selected or typed text") { it.translate() }
     "undo" -> Tool(R.drawable.ic_undo, "Undo") { it.undo() }
     "redo" -> Tool(R.drawable.ic_redo, "Redo") { it.redo() }
-    "cursor" -> Tool(R.drawable.ic_code, "Cursor and edit keys") { it.openPanel(Panel.CURSOR) }
-    "convert" -> Tool(R.drawable.ic_ruler, "Unit converter") { it.openPanel(Panel.CONVERT) }
-    "quick" -> Tool(R.drawable.ic_tune, "Quick settings") { it.openPanel(Panel.QUICK) }
+    "cursor" -> Tool(R.drawable.ic_code, "Cursor and edit keys") { it.togglePanel(Panel.CURSOR) }
+    "convert" -> Tool(R.drawable.ic_ruler, "Unit converter") { it.togglePanel(Panel.CONVERT) }
+    "quick" -> Tool(R.drawable.ic_tune, "Quick settings") { it.togglePanel(Panel.QUICK) }
     "style" -> Tool(R.drawable.ic_sun, "Switch layout style") { it.cycleLayoutStyle() }
     "settings" -> Tool(R.drawable.ic_settings, "Settings") { it.openSettings() }
     else -> null
@@ -558,8 +558,10 @@ private fun Toolbar(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun ToolboxToggle(svc: EveryDayKeysService, c: KbColors, open: Boolean) {
-    ToolTile(R.drawable.ic_toolbox, if (open) "Collapse toolbar" else "Open toolbar", c, open, Modifier.size(48.dp)) {
-        svc.feedback(); svc.toolsOpen = !open
+    // while a panel is open this button is also the way back to the keys
+    val inPanel = svc.panel != Panel.NONE
+    ToolTile(R.drawable.ic_toolbox, if (inPanel) "Back to keyboard" else if (open) "Collapse toolbar" else "Open toolbar", c, open, Modifier.size(48.dp)) {
+        svc.feedback(); if (inPanel) svc.closePanel() else svc.toolsOpen = !open
     }
 }
 
