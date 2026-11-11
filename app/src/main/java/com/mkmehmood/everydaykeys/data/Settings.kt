@@ -95,10 +95,8 @@ object Defs {
             Input("translateEmail", "Email for a higher free MyMemory limit (optional)"),
             Action("translateNote", "Sent only when you tap Translate", "The text you translate goes to the provider you chose. Nothing is sent automatically.")
         )),
-        Section("keystyle", "Key size, shape and font", "Resize, reshape, restyle, font", R.drawable.ic_text, listOf(
-            Slide("keyScale", "Keyboard width and key size (%)", 60, 100, 100),
-            Slide("keyHeight", "Keyboard height (%)", 70, 140, 100),
-            Action("resizeKb", "Resize keyboard", "Drag the edges on the keyboard itself, then tap OK"),
+        Section("keystyle", "Key size, shape and font", "Resize by dragging, shape, style, font", R.drawable.ic_text, listOf(
+            Action("resizeKb", "Resize keyboard", "Drag the edges on the keyboard itself, then tap OK. Reset there goes back to the default size"),
             Choice("keyShape", "Key shape", listOf("square" to "Square corners", "slight" to "Slightly rounded", "rounded" to "Rounded", "soft" to "Very rounded", "round" to "Round"), "rounded"),
             Choice("keyStyle", "Key style", listOf("raised" to "Raised", "flat" to "Flat", "outline" to "Outline"), "raised"),
             Choice("keyFont", "Key font", listOf("sans" to "Sans-serif", "serif" to "Serif", "mono" to "Monospace", "cursive" to "Cursive"), "sans"),
@@ -153,5 +151,7 @@ object Defs {
     )
 
     private val all: Map<String, Item> = sections.flatMap { it.items }.associateBy { it.key }
-    fun default(k: String): String = all[k]?.default ?: ""
+    /** Size values are set by dragging on the keyboard, so they have no row in Settings but still need a default. */
+    private val hidden = mapOf("keyScale" to "100", "keyHeight" to "100", "kbShift" to "0")
+    fun default(k: String): String = all[k]?.default ?: hidden[k] ?: ""
 }
