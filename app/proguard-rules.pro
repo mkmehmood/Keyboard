@@ -1,0 +1,1 @@
+-keep class com.mkmehmood.everydaykeys.ime.EveryDayKeysService { *; }
