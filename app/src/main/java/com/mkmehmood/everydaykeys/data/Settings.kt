@@ -96,7 +96,9 @@ object Defs {
             Action("translateNote", "Sent only when you tap Translate", "The text you translate goes to the provider you chose. Nothing is sent automatically.")
         )),
         Section("keystyle", "Key size, shape and font", "Resize, reshape, restyle, font", R.drawable.ic_text, listOf(
-            Slide("keyScale", "Keyboard size (%)", 60, 100, 100),
+            Slide("keyScale", "Keyboard width and key size (%)", 60, 100, 100),
+            Slide("keyHeight", "Keyboard height (%)", 70, 140, 100),
+            Action("resizeKb", "Resize keyboard", "Drag the edges on the keyboard itself, then tap OK"),
             Choice("keyShape", "Key shape", listOf("square" to "Square corners", "slight" to "Slightly rounded", "rounded" to "Rounded", "soft" to "Very rounded", "round" to "Round"), "rounded"),
             Choice("keyStyle", "Key style", listOf("raised" to "Raised", "flat" to "Flat", "outline" to "Outline"), "raised"),
             Choice("keyFont", "Key font", listOf("sans" to "Sans-serif", "serif" to "Serif", "mono" to "Monospace", "cursive" to "Cursive"), "sans"),

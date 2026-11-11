@@ -363,6 +363,7 @@ fun SectionScreen(id: String, nav: NavController) {
     fun onAction(a: Action) {
         when (a.id) {
             "bgEdit" -> nav.navigate("background")
+            "resizeKb" -> { commitSetting(ctx, scope, "resizeMode", "true"); toast("Tap the box at the bottom to open the keyboard, then drag its edges") }
             "snippets" -> nav.navigate("snippets")
             "dictionary" -> nav.navigate("dictionary")
             "clearClips" -> confirm = Confirm("Clear all unpinned clipboard history?") {

@@ -520,7 +520,9 @@ private fun QuickTile(svc: EveryDayKeysService, c: KbColors, icon: Int, title: S
 @Composable
 internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
     Column(Modifier.fillMaxWidth().height(270.dp).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        PanelHeader(c, "Quick settings", "Back to keyboard", { svc.closePanel() })
+        PanelHeader(c, "Quick settings", "Back to keyboard", { svc.closePanel() }) {
+            IconTap(R.drawable.ic_settings, "All settings", c, c.sub) { svc.openSettings() }
+        }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 QuickTile(svc, c, R.drawable.ic_sparkle, "Suggestions", "suggestions", Modifier.weight(1f))
@@ -532,7 +534,7 @@ internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 QuickTile(svc, c, R.drawable.ic_clipboard, "Clipboard", "clipEnabled", Modifier.weight(1f))
-                QuickBox(c, R.drawable.ic_settings, "All settings", "Open", false, Modifier.weight(1f).clickable(onClickLabel = "Open all settings", role = Role.Button) { svc.openSettings() })
+                QuickBox(c, R.drawable.ic_tune, "Resize keyboard", "Drag edges", false, Modifier.weight(1f).clickable(onClickLabel = "Resize the keyboard", role = Role.Button) { svc.closePanel(); svc.setPref("resizeMode", "true") })
             }
         }
     }
