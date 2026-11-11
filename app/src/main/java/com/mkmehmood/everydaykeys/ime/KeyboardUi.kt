@@ -159,7 +159,7 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
             when (svc.panel) {
                 Panel.NONE -> Keys(svc, c, h)
                 Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
-                Panel.SNIPPETS -> SnippetPanel(svc, c)
+                Panel.SNIPPETS -> { SnippetPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.EMOJI -> { EmojiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.CURSOR -> CursorPanel(svc, c, h)
                 Panel.CONVERT -> ConvertPanel(svc, c)

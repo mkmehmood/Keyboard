@@ -44,6 +44,7 @@ import com.mkmehmood.everydaykeys.data.Clip
 import com.mkmehmood.everydaykeys.data.Translator
 import com.mkmehmood.everydaykeys.data.UnitDef
 import com.mkmehmood.everydaykeys.data.Units
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // Every screen that opens above the keyboard (clipboard, snippets, emoji, converter, cursor keys, paste progress, translation)
@@ -52,6 +53,9 @@ import kotlinx.coroutines.launch
 
 internal val PanelCard = Dim.Card
 internal val PanelField = Dim.Field
+
+/** Every panel that replaces the keys is this tall, so the keyboard does not jump when switching between them. */
+private val PanelHeight = 270.dp
 
 /** The thin border colour used on cards and fields. */
 /** The keyboard's colours expressed as the shared design palette, so panels use the same pieces as Settings. */
@@ -241,7 +245,7 @@ internal fun ClipPanel(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
-    Column(Modifier.fillMaxWidth().height(230.dp).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().height(PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         PanelHeader(c, "Clipboard", "Back to keyboard", { svc.closePanel() })
         PanelGroup(c, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -267,8 +271,11 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var preview by remember { mutableStateOf<Clip?>(null) }
+    var confirmClear by remember { mutableStateOf(false) }
+    // the "Clear all?" button disarms itself after a few seconds so a stray tap later does nothing
+    LaunchedEffect(confirmClear) { if (confirmClear) { delay(3000); confirmClear = false } }
     Column(
-        Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 290.dp).padding(2.dp),
+        Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else PanelHeight).padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         val pv = preview
@@ -282,16 +289,31 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                 PanelSearch(svc, c, "Search clipboard", Modifier.weight(1f))
             }
         } else {
-            PanelHeader(c, "Clipboard", "Back to keyboard", { svc.closePanel() }) {
-                if (selected.isNotEmpty()) IconTap(R.drawable.ic_add, "Merge selected items into one paste", c, c.accent) {
-                    svc.pasteClips(list.filter { it.id in selected }); selected = emptySet()
+            if (selected.isEmpty()) {
+                PanelHeader(c, "Clipboard", "Back to keyboard", { svc.closePanel() }) {
+                    if (confirmClear) Text(
+                        "Clear all?", color = c.onAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.accent)
+                            .clickable(onClickLabel = "Confirm: clear all unpinned items") { scope.launch { svc.clips.clearUnpinned() }; confirmClear = false }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                    else IconTap(R.drawable.ic_trash, "Clear all unpinned items", c, c.sub) { confirmClear = true }
                 }
-                IconTap(R.drawable.ic_trash, "Clear all unpinned items", c, c.sub) { scope.launch { svc.clips.clearUnpinned() } }
+            } else {
+                // selection mode: the header says how many are picked and pastes them as one
+                Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconTap(R.drawable.ic_close, "Clear selection", c) { selected = emptySet() }
+                    Text("${selected.size} selected", color = c.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 2.dp))
+                    PanelButton(svc, c, "Paste all", R.drawable.ic_paste, true, Modifier.width(124.dp)) {
+                        svc.pasteClips(list.filter { it.id in selected }); selected = emptySet()
+                    }
+                }
             }
             PanelSearch(svc, c, "Search clipboard", Modifier.fillMaxWidth())
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val counts = listOf(0, all.count { it.pinned }, all.count { it.preview.startsWith("http") }, all.count { it.filePath != null })
                 itemsIndexed(listOf("All", "Pinned", "Links", "Large")) { i, name ->
-                    PanelChip(c, name, i == filter, "Show $name items") { filter = i }
+                    PanelChip(c, if (i > 0 && counts[i] > 0) "$name ${counts[i]}" else name, i == filter, "Show $name items") { filter = i }
                 }
             }
         }
@@ -303,12 +325,12 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                     val first = clip.preview.lineSequence().firstOrNull { it.isNotBlank() } ?: clip.preview
                     val large = clip.filePath != null
                     val link = clip.preview.startsWith("http")
-                    val sub = when {
-                        clip.pinned -> "Pinned"
+                    val kind = when {
                         large -> "Large item, ${clip.length / 1000} K characters, stored as a file"
                         link -> "Link"
-                        else -> "Text"
+                        else -> "Text, %,d characters".format(clip.length)
                     }
+                    val sub = if (clip.pinned) "Pinned, $kind" else kind
                     if (i > 0) PanelDivider(c)
                     PanelRow(
                         c, when { clip.pinned -> R.drawable.ic_pin; large -> R.drawable.ic_snippet; link -> R.drawable.ic_code; else -> R.drawable.ic_clipboard },
@@ -362,26 +384,44 @@ private fun ColumnScope.ClipPreview(svc: EveryDayKeysService, c: KbColors, clip:
 @Composable
 internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
     val ctx = LocalContext.current
-    val list by remember { AppDb.get(ctx).snippets().observe() }.collectAsState(initial = emptyList())
-    Column(Modifier.fillMaxWidth().height(240.dp).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        PanelHeader(c, "Text snippets", "Back to keyboard", { svc.closePanel() }) {
-            IconTap(R.drawable.ic_add, "Add a snippet", c, c.accent) { svc.openSettings() }
-            IconTap(R.drawable.ic_settings, "Manage snippets", c, c.sub) { svc.openSettings() }
+    val all by remember { AppDb.get(ctx).snippets().observe() }.collectAsState(initial = emptyList())
+    val q = svc.query.trim().lowercase()
+    val list = if (q.isEmpty()) all else all.filter { it.title.lowercase().contains(q) || it.body.lowercase().contains(q) || it.shortcut.lowercase().contains(q) }
+    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (svc.searching) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconTap(R.drawable.ic_back, "Stop searching", c) { svc.searching = false; svc.query = "" }
+                PanelSearch(svc, c, "Search snippets", Modifier.weight(1f))
+            }
+        } else {
+            PanelHeader(c, "Text snippets", "Back to keyboard", { svc.closePanel() }) {
+                if (all.size > 4) IconTap(R.drawable.ic_search, "Search snippets", c, c.sub) { svc.searching = true }
+                IconTap(R.drawable.ic_add, "Add or manage snippets in Settings", c, c.accent) { svc.openSettings() }
+            }
         }
         PanelGroup(c, Modifier.weight(1f)) {
-            if (list.isEmpty()) PanelEmpty(c, R.drawable.ic_snippet, "No snippets yet. Add some in Settings, then type a shortcut like ;addr.")
-            else LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
-                    if (i > 0) PanelDivider(c)
-                    PanelRow(c, R.drawable.ic_snippet, s.title, s.body.replace(Regex("\\s+"), " ").take(60), onClick = { svc.commitText(s.body); svc.closePanel() }) {
-                        if (s.shortcut.isNotBlank()) Text(
-                            s.shortcut, color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                            modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.accent.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
+            when {
+                all.isEmpty() -> Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    PanelTile(c, R.drawable.ic_snippet, 44.dp)
+                    Text("No snippets yet", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+                    Text("Save text you type often, then insert it with one tap or a shortcut like ;addr.", color = c.sub, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
+                    PanelButton(svc, c, "Add a snippet", R.drawable.ic_add, true, Modifier.fillMaxWidth(0.7f)) { svc.openSettings() }
+                }
+                list.isEmpty() -> PanelEmpty(c, R.drawable.ic_search, "No snippets match")
+                else -> LazyColumn(Modifier.fillMaxSize()) {
+                    itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
+                        if (i > 0) PanelDivider(c)
+                        PanelRow(c, R.drawable.ic_snippet, s.title, s.body.replace(Regex("\\s+"), " ").take(60), onClick = { svc.feedback(); svc.commitText(s.body); svc.closePanel() }) {
+                            if (s.shortcut.isNotBlank()) Text(
+                                s.shortcut, color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.accent.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
         }
+        if (!svc.searching && all.isNotEmpty()) PanelNote(c, R.drawable.ic_info, "Tap to insert. Typing a shortcut such as ;addr expands it too.")
     }
 }
 
@@ -459,30 +499,45 @@ private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbCol
 }
 
 @Composable
+private fun PanelCaption(c: KbColors, text: String) =
+    Text(text, color = c.sub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(start = 4.dp))
+
+/** Two cards: Move (Home, End and the arrows) and Edit (select, copy, cut, paste, undo, redo). Keys share the panel height. */
+@Composable
 internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val gap = Arrangement.spacedBy(5.dp)
-    val key = Modifier.height(48.dp)
-    Column(Modifier.fillMaxWidth().padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val key = Modifier.weight(1f).fillMaxHeight()
+    Column(Modifier.fillMaxWidth().height(PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         PanelHeader(c, "Cursor and edit keys", "Back to keyboard", { svc.closePanel() })
-        PanelGroup(c) {
-            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    Key(svc, c, key.weight(1f), "Line start", label = "Home", repeat = false) { svc.sendKey(KeyEvent.KEYCODE_MOVE_HOME) }
-                    Key(svc, c, key.weight(1f), "Cursor up", icon = R.drawable.ic_up, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
-                    Key(svc, c, key.weight(1f), "Line end", label = "End") { svc.sendKey(KeyEvent.KEYCODE_MOVE_END) }
-                    Key(svc, c, key.weight(1f), "Select all", icon = R.drawable.ic_select_all, tone = 1) { svc.selectAll() }
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PanelGroup(c, Modifier.weight(1f).fillMaxHeight()) {
+                Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    PanelCaption(c, "Move")
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, key, "Line start", label = "Home") { svc.sendKey(KeyEvent.KEYCODE_MOVE_HOME) }
+                        Key(svc, c, key, "Cursor up", icon = R.drawable.ic_up, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
+                        Key(svc, c, key, "Line end", label = "End") { svc.sendKey(KeyEvent.KEYCODE_MOVE_END) }
+                    }
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, key, "Cursor left", icon = R.drawable.ic_left, repeat = true) { svc.moveCursor(-1) }
+                        Key(svc, c, key, "Cursor down", icon = R.drawable.ic_down, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
+                        Key(svc, c, key, "Cursor right", icon = R.drawable.ic_right, repeat = true) { svc.moveCursor(1) }
+                    }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    Key(svc, c, key.weight(1f), "Cursor left", icon = R.drawable.ic_left, repeat = true) { svc.moveCursor(-1) }
-                    Key(svc, c, key.weight(1f), "Cursor down", icon = R.drawable.ic_down, repeat = true) { svc.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
-                    Key(svc, c, key.weight(1f), "Cursor right", icon = R.drawable.ic_right, repeat = true) { svc.moveCursor(1) }
-                    Key(svc, c, key.weight(1f), "Copy", icon = R.drawable.ic_copy, tone = 1) { svc.copy() }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    Key(svc, c, key.weight(1f), "Undo", icon = R.drawable.ic_undo) { svc.undo() }
-                    Key(svc, c, key.weight(1f), "Redo", icon = R.drawable.ic_redo) { svc.redo() }
-                    Key(svc, c, key.weight(1f), "Cut", icon = R.drawable.ic_cut, tone = 1) { svc.cut() }
-                    Key(svc, c, key.weight(1f), "Paste latest history item", icon = R.drawable.ic_paste, tone = 1) { svc.paste() }
+            }
+            PanelGroup(c, Modifier.weight(1f).fillMaxHeight()) {
+                Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    PanelCaption(c, "Edit")
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, key, "Select all", icon = R.drawable.ic_select_all, tone = 1) { svc.selectAll() }
+                        Key(svc, c, key, "Copy", icon = R.drawable.ic_copy, tone = 1) { svc.copy() }
+                        Key(svc, c, key, "Cut", icon = R.drawable.ic_cut, tone = 1) { svc.cut() }
+                    }
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = gap) {
+                        Key(svc, c, key, "Paste latest history item", icon = R.drawable.ic_paste, tone = 1) { svc.paste() }
+                        Key(svc, c, key, "Undo", icon = R.drawable.ic_undo) { svc.undo() }
+                        Key(svc, c, key, "Redo", icon = R.drawable.ic_redo) { svc.redo() }
+                    }
                 }
             }
         }
@@ -516,25 +571,53 @@ private fun QuickTile(svc: EveryDayKeysService, c: KbColors, icon: Int, title: S
     )
 }
 
-/** The switches people reach for while typing, as tiles: tap to turn on or off. */
+/** A tile that steps through a fixed list of values on each tap. Highlighted when it is not on the first (default) value. */
+@Composable
+private fun QuickCycle(svc: EveryDayKeysService, c: KbColors, icon: Int, title: String, key: String, options: List<Pair<String, String>>, modifier: Modifier) {
+    val i = options.indexOfFirst { it.first == svc.prefs.str(key) }.coerceAtLeast(0)
+    QuickBox(
+        c, icon, title, options[i].second, i != 0,
+        modifier.clickable(onClickLabel = "Change $title, now ${options[i].second}", role = Role.Button) {
+            svc.feedback(); svc.setPref(key, options[(i + 1) % options.size].first)
+        }
+    )
+}
+
+@Composable
+private fun QuickLabel(c: KbColors, text: String) =
+    Text(text, color = c.sub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+
+/** The switches people reach for while typing, as tiles: tap to turn on or off. Grouped by what they change. */
 @Composable
 internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
-    Column(Modifier.fillMaxWidth().height(270.dp).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val side = Arrangement.spacedBy(8.dp)
+    Column(Modifier.fillMaxWidth().height(PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         PanelHeader(c, "Quick settings", "Back to keyboard", { svc.closePanel() }) {
             IconTap(R.drawable.ic_settings, "All settings", c, c.sub) { svc.openSettings() }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickLabel(c, "Typing")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
                 QuickTile(svc, c, R.drawable.ic_sparkle, "Suggestions", "suggestions", Modifier.weight(1f))
                 QuickTile(svc, c, R.drawable.ic_check, "Autocorrect", "autocorrect", Modifier.weight(1f), on = "mild", off = "off", onLabel = "Mild")
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
+                QuickTile(svc, c, R.drawable.ic_text, "Auto-capitalize", "autoCap", Modifier.weight(1f))
+                QuickTile(svc, c, R.drawable.ic_clipboard, "Clipboard", "clipEnabled", Modifier.weight(1f))
+            }
+            QuickLabel(c, "Feedback")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
                 QuickTile(svc, c, R.drawable.ic_vibration, "Vibration", "vibrate", Modifier.weight(1f))
                 QuickTile(svc, c, R.drawable.ic_sound, "Key sound", "sound", Modifier.weight(1f))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuickTile(svc, c, R.drawable.ic_clipboard, "Clipboard", "clipEnabled", Modifier.weight(1f))
-                QuickBox(c, R.drawable.ic_tune, "Resize keyboard", "Drag edges", false, Modifier.weight(1f).clickable(onClickLabel = "Resize the keyboard", role = Role.Button) { svc.closePanel(); svc.setPref("resizeMode", "true") })
+            QuickLabel(c, "Look and size")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
+                QuickCycle(svc, c, R.drawable.ic_sun, "Theme", "theme", listOf("system" to "Auto", "light" to "Light", "dark" to "Dark"), Modifier.weight(1f))
+                QuickCycle(svc, c, R.drawable.ic_one_hand, "One-handed", "oneHanded", listOf("off" to "Off", "left" to "Left", "right" to "Right"), Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
+                QuickTile(svc, c, R.drawable.ic_numpad, "Number row", "numberRow", Modifier.weight(1f))
+                QuickBox(c, R.drawable.ic_tune, "Resize keyboard", "Drag edges", false, Modifier.weight(1f).clickable(onClickLabel = "Resize the keyboard", role = Role.Button) { svc.feedback(); svc.closePanel(); svc.setPref("resizeMode", "true") })
             }
         }
     }
