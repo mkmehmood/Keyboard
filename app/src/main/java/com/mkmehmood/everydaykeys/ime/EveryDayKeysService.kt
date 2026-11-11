@@ -106,6 +106,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         noticeJob = scope.launch { kotlinx.coroutines.delay(1600); notice = null }
     }
     var searching by mutableStateOf(false)
+    /** Height in px of the key area when no panel is open; panels such as the clip preview use it as their upper limit. */
+    var keysHeightPx by mutableStateOf(0)
     var query by mutableStateOf("")
 
     // ---- clipboard lock ----

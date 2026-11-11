@@ -267,9 +267,9 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     var confirmClear by remember { mutableStateOf(false) }
     // the "Clear all?" button disarms itself after a few seconds so a stray tap later does nothing
     LaunchedEffect(confirmClear) { if (confirmClear) { delay(3000); confirmClear = false } }
-    // the preview takes most of the screen so long clips can be read; the list keeps the standard panel height
-    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
-    val previewH = (screenH - 140).coerceIn(270, 640).dp
+    // the preview grows to the height of the key area it replaces, so the keyboard never gets taller than normal
+    val keysH = with(androidx.compose.ui.platform.LocalDensity.current) { svc.keysHeightPx.toDp() }
+    val previewH = if (svc.keysHeightPx > 0) keysH.coerceAtLeast(200.dp) else PanelHeight
     Column(
         Modifier.fillMaxWidth().height(if (preview != null) previewH else if (svc.searching) 150.dp else PanelHeight).padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)

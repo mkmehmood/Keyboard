@@ -157,7 +157,7 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
                 else if (p.bool("showToolbar")) Toolbar(svc, c)
             }
             when (svc.panel) {
-                Panel.NONE -> Keys(svc, c, h)
+                Panel.NONE -> Box(Modifier.onSizeChanged { svc.keysHeightPx = it.height }) { Keys(svc, c, h) }
                 Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.SNIPPETS -> { SnippetPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.EMOJI -> { EmojiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
