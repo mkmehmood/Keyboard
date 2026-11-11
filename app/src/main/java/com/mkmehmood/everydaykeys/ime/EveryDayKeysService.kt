@@ -97,13 +97,18 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     var progress by mutableStateOf<Float?>(null)
 
     /** A short confirmation (Copied, Pasted, Undo...) shown over the keyboard for a moment. */
-    class Notice(val icon: Int, val text: String)
+    class Notice(val icon: Int, val text: String, val action: String? = null, val onAction: (() -> Unit)? = null)
     var notice by mutableStateOf<Notice?>(null)
+    /** True while text is selected: the toolbar shows select all, copy, cut, paste, undo and redo. */
+    var hasSelection by mutableStateOf(false)
+    /** Height of the keyboard (strip and keys) in px, used to size the clipboard preview. */
+    var kbHeightPx by mutableStateOf(0)
+    var previewing by mutableStateOf(false)
     private var noticeJob: Job? = null
-    fun showNotice(icon: Int, text: String) {
-        notice = Notice(icon, text)
+    fun showNotice(icon: Int, text: String, action: String? = null, onAction: (() -> Unit)? = null) {
+        notice = Notice(icon, text, action, onAction)
         noticeJob?.cancel()
-        noticeJob = scope.launch { kotlinx.coroutines.delay(1600); notice = null }
+        noticeJob = scope.launch { kotlinx.coroutines.delay(if (action != null) 2800L else 1600L); notice = null }
     }
     var searching by mutableStateOf(false)
     var query by mutableStateOf("")
@@ -234,6 +239,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
         super.onUpdateSelection(a, b, c, d, e, f)
+        hasSelection = c != d
         // the cursor moved and it was not our typing: old undo and spacing state no longer applies
         if (SystemClock.uptimeMillis() - ownEditAt > 500) resetTypingState()
         refreshSuggestions()
@@ -515,19 +521,19 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     fun sendKey(code: Int) = sendDownUpKeyEvents(code)
     fun selectAll() {
         currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
-        showNotice(R.drawable.ic_select_all, "Selected all")
+        showNotice(R.drawable.ic_select_all, "Selected all", "Copy") { copy() }
     }
     fun copy() {
         val ic = currentInputConnection ?: return
         if (ic.getSelectedText(0).isNullOrEmpty()) { showNotice(R.drawable.ic_info, "Select some text first"); return }
         ic.performContextMenuAction(android.R.id.copy)
-        showNotice(R.drawable.ic_copy, "Copied")
+        showNotice(R.drawable.ic_copy, "Copied", "Paste") { paste() }
     }
     fun cut() {
         val ic = currentInputConnection ?: return
         if (ic.getSelectedText(0).isNullOrEmpty()) { showNotice(R.drawable.ic_info, "Select some text first"); return }
         ic.performContextMenuAction(android.R.id.cut)
-        showNotice(R.drawable.ic_cut, "Cut")
+        showNotice(R.drawable.ic_cut, "Cut", "Paste") { paste() }
     }
 
     /** Paste the newest history item through the chunked path, so size never matters. */
@@ -546,8 +552,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         ic.sendKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0, meta))
         ic.sendKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0, meta))
     }
-    fun undo() { ctrl(KeyEvent.KEYCODE_Z, false); showNotice(R.drawable.ic_undo, "Undo") }
-    fun redo() { ctrl(KeyEvent.KEYCODE_Z, true); showNotice(R.drawable.ic_redo, "Redo") }
+    fun undo() { ctrl(KeyEvent.KEYCODE_Z, false); showNotice(R.drawable.ic_undo, "Undo", "Redo") { redo() } }
+    fun redo() { ctrl(KeyEvent.KEYCODE_Z, true); showNotice(R.drawable.ic_redo, "Redo", "Undo") { undo() } }
 
     fun pasteClips(list: List<Clip>) {
         if (list.isEmpty()) return

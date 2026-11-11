@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
 import com.mkmehmood.everydaykeys.R
 import com.mkmehmood.everydaykeys.design.*
 import com.mkmehmood.everydaykeys.data.AppDb
@@ -61,11 +62,15 @@ internal fun KbColors.palette() = Palette(
 
 private fun hair(c: KbColors) = c.palette().hairline
 
-/** Small rounded square with an accent icon, used at the start of rows and for the tool icons. */
+/** A plain icon (no box) for row starts and tools; accent when [filled], otherwise the quiet secondary colour. */
 @Composable
-internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean = false) = DsTile(c.palette(), icon, size, filled)
+internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean = false) {
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        Icon(painterResource(icon), null, tint = if (filled) c.accent else c.sub, modifier = Modifier.size(size * 0.65f))
+    }
+}
 
-/** A toolbar icon: the tile is the tap target. */
+/** A toolbar icon, 48dp tall tap target. */
 @Composable
 internal fun ToolTile(icon: Int, desc: String, c: KbColors, filled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(
@@ -100,7 +105,8 @@ internal fun PanelRow(
     onLong: (() -> Unit)? = null, onClick: () -> Unit, trailing: @Composable RowScope.() -> Unit = {}
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onLongClick = onLong, onClick = onClick)
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).background(if (selected) c.accent.copy(alpha = 0.12f) else Color.Transparent)
+            .combinedClickable(onLongClick = onLong, onClick = onClick)
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -150,10 +156,6 @@ internal fun PanelChip(c: KbColors, text: String, selected: Boolean, desc: Strin
 /** Small grey note under a card, with an icon. */
 @Composable
 internal fun PanelNote(c: KbColors, icon: Int, text: String) = DsNote(c.palette(), icon, text)
-
-/** Brief confirmation over the keyboard after copy, cut, paste, select all, undo or redo. It never blocks touches. */
-@Composable
-internal fun NoticePill(c: KbColors, n: EveryDayKeysService.Notice) = DsNotice(c.palette(), n.icon, n.text)
 
 @Composable
 internal fun PanelEmpty(c: KbColors, icon: Int, text: String) {
@@ -244,7 +246,7 @@ private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
         PanelHeader(c, "Clipboard", "Back to keyboard", { svc.closePanel() })
         PanelGroup(c, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                PanelTile(c, R.drawable.ic_lock, 48.dp)
+                PanelTile(c, R.drawable.ic_lock, 48.dp, true)
                 Text("Clipboard history is locked", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
                 Text("Use your fingerprint or screen lock to open it.", color = c.sub, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                 PanelButton(svc, c, "Unlock", R.drawable.ic_lock, true, Modifier.fillMaxWidth(0.7f)) { svc.requestUnlock() }
@@ -259,8 +261,11 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var preview by remember { mutableStateOf<Clip?>(null) }
+    // The preview of copied content takes the keyboard's whole height (toolbar and keys included) so more of it can be read.
+    DisposableEffect(preview != null) { svc.previewing = preview != null; onDispose { svc.previewing = false } }
+    val kbHeight = with(LocalDensity.current) { svc.kbHeightPx.toDp() }.coerceAtLeast(270.dp)
     Column(
-        Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp).padding(2.dp),
+        Modifier.fillMaxWidth().height(if (preview != null) kbHeight else if (svc.searching) 150.dp else 270.dp).padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         val pv = preview
@@ -462,7 +467,7 @@ internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 // ---------------------------------------------------------------- quick settings
 
 @Composable
-private fun QuickRow(svc: EveryDayKeysService, c: KbColors, icon: Int, title: String, sub: String, key: String, on: String = "true", off: String = "false") {
+private fun QuickRow(svc: EveryDayKeysService, c: KbColors, icon: Int?, title: String, sub: String, key: String, on: String = "true", off: String = "false") {
     DsToggleRow(c.palette(), icon, title, sub, svc.prefs.str(key) != off) { v -> svc.feedback(); svc.setPref(key, if (v) on else off) }
 }
 
@@ -475,15 +480,15 @@ internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
         }
         PanelGroup(c, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                QuickRow(svc, c, R.drawable.ic_sparkle, "Word suggestions", "Suggestions above the keys", "suggestions")
+                QuickRow(svc, c, null, "Word suggestions", "Suggestions above the keys", "suggestions")
                 PanelDivider(c)
-                QuickRow(svc, c, R.drawable.ic_check, "Autocorrect", "Fix typos when you press space", "autocorrect", on = "mild", off = "off")
+                QuickRow(svc, c, null, "Autocorrect", "Fix typos when you press space", "autocorrect", on = "mild", off = "off")
                 PanelDivider(c)
-                QuickRow(svc, c, R.drawable.ic_vibration, "Vibration", "Buzz on each key press", "vibrate")
+                QuickRow(svc, c, null, "Vibration", "Buzz on each key press", "vibrate")
                 PanelDivider(c)
-                QuickRow(svc, c, R.drawable.ic_sound, "Key sound", "Click on each key press", "sound")
+                QuickRow(svc, c, null, "Key sound", "Click on each key press", "sound")
                 PanelDivider(c)
-                QuickRow(svc, c, R.drawable.ic_clipboard, "Clipboard history", "Save everything you copy", "clipEnabled")
+                QuickRow(svc, c, null, "Clipboard history", "Save everything you copy", "clipEnabled")
             }
         }
     }
