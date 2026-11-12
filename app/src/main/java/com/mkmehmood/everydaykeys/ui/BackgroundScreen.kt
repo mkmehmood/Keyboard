@@ -5,7 +5,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint
 import android.graphics.RectF
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -75,7 +74,7 @@ fun BackgroundScreen(nav: NavController) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) scope.launch {
             val b = withContext(Dispatchers.IO) { KbBackground.decode(ctx, uri) }
-            if (b == null) Toast.makeText(ctx, "Could not open that image", Toast.LENGTH_SHORT).show()
+            if (b == null) Snack.post("Could not open that image")
             else { src = b; fresh = true; zoom = 1f; offFx = 0f; offFy = 0f }
         }
     }
@@ -89,7 +88,7 @@ fun BackgroundScreen(nav: NavController) {
 
     fun save() {
         val b = src
-        if (b == null) { Toast.makeText(ctx, "Choose a photo first", Toast.LENGTH_SHORT).show(); return }
+        if (b == null) { Snack.post("Choose a photo first"); return }
         scope.launch {
             if (fresh && frame.width > 0) withContext(Dispatchers.IO) {
                 val outW = min(1080, dm.widthPixels); val outH = (outW / aspect).toInt()
@@ -102,7 +101,7 @@ fun BackgroundScreen(nav: NavController) {
             SettingsRepo.set(ctx, "bgDim", dim.toInt().toString()); SettingsRepo.set(ctx, "bgBlur", blur.toInt().toString())
             SettingsRepo.set(ctx, "bgKeyAlpha", keyAlpha.toInt().toString()); SettingsRepo.set(ctx, "bgOn", "true")
             SettingsRepo.set(ctx, "bgVersion", System.currentTimeMillis().toString())
-            Toast.makeText(ctx, "Background saved", Toast.LENGTH_SHORT).show()
+            Snack.post("Background saved")
             nav.popBackStack()
         }
     }

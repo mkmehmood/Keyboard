@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.channels.Channel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +24,13 @@ import com.mkmehmood.everydaykeys.design.*
 // large collapsing top app bar, filled cards, list items, pill search bar, tonal icon containers,
 // filled / tonal / outlined buttons and an extended FAB.
 
+/** Messages for the Material 3 snackbar. Queued, so one posted just before leaving a screen still shows on the next. */
+internal object Snack {
+    private val ch = Channel<String>(Channel.BUFFERED)
+    fun post(message: String) { ch.trySend(message) }
+    suspend fun collect(show: suspend (String) -> Unit) { for (m in ch) show(m) }
+}
+
 internal val CardShape = Dim.Card
 internal val FieldShape = Dim.Field
 
@@ -37,7 +46,10 @@ internal fun SettingsScaffold(
 ) {
     val cs = MaterialTheme.colorScheme
     val behavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) { Snack.collect { snackbar.showSnackbar(it) } }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         modifier = Modifier.fillMaxSize().nestedScroll(behavior.nestedScrollConnection).imePadding(),
         containerColor = cs.surface,
         topBar = {

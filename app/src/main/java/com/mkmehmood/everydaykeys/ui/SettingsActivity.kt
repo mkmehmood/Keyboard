@@ -6,7 +6,6 @@ import android.net.Uri
 import android.provider.Settings
 import android.text.format.Formatter
 import android.view.inputmethod.InputMethodManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -123,10 +122,10 @@ private fun imeStatus(ctx: Context): Pair<Boolean, Boolean> {
 private fun commitSetting(ctx: Context, scope: CoroutineScope, k: String, v: String) {
     if (k == "hideLauncher" && v == "true") {
         if (!imeStatus(ctx).first) {
-            Toast.makeText(ctx, "Enable Everyday Keys in Android settings first, so you can still reach these settings.", Toast.LENGTH_LONG).show()
+            Snack.post("Enable Everyday Keys in Android settings first, so you can still reach these settings.")
             return
         }
-        Toast.makeText(ctx, "The icon will be hidden when you leave this screen. Open settings again from the keyboard's gear icon or Android's keyboard settings.", Toast.LENGTH_LONG).show()
+        Snack.post("The icon will be hidden when you leave this screen. Open settings again from the keyboard's gear icon or Android's keyboard settings.")
     }
     scope.launch { SettingsRepo.set(ctx, k, v) }
 }
@@ -352,7 +351,7 @@ fun SectionScreen(id: String, nav: NavController) {
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     var usage by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) { usage = ClipRepo(ctx).usageBytes() }
-    fun toast(t: String) = Toast.makeText(ctx, t, Toast.LENGTH_SHORT).show()
+    fun toast(t: String) = Snack.post(t)
 
     val exportL = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch { runCatching { Backup.export(ctx, uri) }.onSuccess { toast("Backup saved") }.onFailure { toast("Backup failed") } }
