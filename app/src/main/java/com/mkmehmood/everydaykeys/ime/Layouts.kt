@@ -34,5 +34,5 @@ object Layouts {
     val symPagesWithNumberRow = listOf(listOf(sym1[1], sym1[2], r("% = \\ | < > [ ]")), sym2, sym3, sym4)
 
     /** label shown on key, text committed */
-    val ops = listOf("+" to "+", "−" to "-", "×" to "×", "÷" to "÷", "=" to "=", "%" to "%", "/" to "/")
+    val ops = listOf("+" to "+", "−" to "−", "×" to "×", "÷" to "÷", "=" to "=", "%" to "%", "/" to "/")
 }

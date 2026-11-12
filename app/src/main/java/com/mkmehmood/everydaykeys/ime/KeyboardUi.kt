@@ -429,23 +429,23 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
     val gap = Arrangement.spacedBy(g)
     val pill = RoundedCornerShape(50)
     val dig: Shape? = if (kind == "circles") pill else null
-    val ops = listOf("÷" to "/", "×" to "*", "−" to "-", "+" to "+")
+    val ops = listOf("÷" to "÷", "×" to "×", "−" to "−", "+" to "+")
     val toLetters = { svc.mode = Mode.LETTERS }
     val toSym = { svc.mode = Mode.SYM1 }
     Box(Modifier.fillMaxWidth()) {
         when (kind) {
             "top" -> Column(Modifier.width(grid.width).align(Alignment.Center), verticalArrangement = gap) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    listOf("×" to "*", "÷" to "/", "=" to "=", "%" to "%", "(" to "(", ")" to ")", "," to ",").forEach { (l, v) ->
+                    listOf("×" to "×", "÷" to "÷", "=" to "=", "%" to "%", "(" to "(", ")" to ")", "," to ",").forEach { (l, v) ->
                         NK(svc, c, Modifier.weight(1f).height(kh * 0.7f), l, 1) { if (v == "=") svc.onEquals() else svc.commitText(v) }
                     }
                 }
-                val side = listOf("backspace", "+", "-")
+                val side = listOf("backspace", "+", "−")
                 listOf("123", "456", "789").forEachIndexed { r, digits ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
                         digits.forEach { d -> val k = d.toString(); NK(svc, c, Modifier.weight(1f).height(kh), k) { svc.onChar(k) } }
                         if (r == 0) NI(svc, c, Modifier.weight(1f).height(kh), R.drawable.ic_backspace, "Backspace", repeat = true) { svc.onBackspace() }
-                        else { val o = side[r]; NK(svc, c, Modifier.weight(1f).height(kh), if (o == "-") "−" else o, 1, desc = if (o == "-") "Minus" else "Plus") { svc.commitText(o) } }
+                        else { val o = side[r]; NK(svc, c, Modifier.weight(1f).height(kh), o, 1, desc = if (o == "−") "Minus" else "Plus") { svc.commitText(o) } }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
@@ -512,8 +512,8 @@ private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, grid: Grid) {
         Row(Modifier.width(grid.width).align(Alignment.Center), horizontalArrangement = gap) {
             Column(Modifier.weight(0.62f), verticalArrangement = gap) {
                 val opH = (kh * 3 + g * 2 - g * 3) / 4
-                listOf("+", "-", "*", "/").forEach { o ->
-                    Key(svc, c, Modifier.fillMaxWidth().height(opH), o, label = o, tone = 1) { svc.commitText(o) }
+                listOf("+" to "Plus", "−" to "Minus", "×" to "Multiply", "÷" to "Divide").forEach { (o, d) ->
+                    Key(svc, c, Modifier.fillMaxWidth().height(opH), d, label = o, tone = 1) { svc.commitText(o) }
                 }
                 Key(svc, c, Modifier.fillMaxWidth().height(kh), "Back to letters. Long press for symbols.", icon = R.drawable.ic_keyboard, tone = 1,
                     onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.LETTERS }

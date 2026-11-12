@@ -6,7 +6,7 @@ import kotlin.math.floor
 /** Minimal local expression evaluator for the number pad "=" key. */
 object Calc {
     fun eval(expr: String): Double? = try {
-        val p = Parser(expr.replace("×", "*").replace("÷", "/").replace(",", "").replace(" ", ""))
+        val p = Parser(expr.replace("×", "*").replace("÷", "/").replace("−", "-").replace(",", "").replace(" ", ""))
         val v = p.expr()
         if (p.i == p.s.length && !v.isNaN() && !v.isInfinite()) v else null
     } catch (e: Exception) { null }
