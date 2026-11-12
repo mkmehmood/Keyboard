@@ -6,7 +6,10 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.activity.compose.setContent
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import com.mkmehmood.everydaykeys.ime.EveryDayKeysService
 
 /** Shows the system fingerprint / screen-lock prompt, then tells the keyboard the clipboard history may be opened. */
@@ -18,13 +21,16 @@ class UnlockActivity : FragmentActivity() {
         else BiometricManager.Authenticators.BIOMETRIC_WEAK
 
         if (BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {
-            // a Material 3 dialog instead of a toast
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Clipboard lock")
-                .setMessage("Set up a fingerprint or screen lock in Android settings to use the clipboard lock.")
-                .setPositiveButton("OK", null)
-                .setOnDismissListener { finish() }
-                .show()
+            setContent {
+                AppColors {
+                    AlertDialog(
+                        onDismissRequest = { finish() },
+                        title = { Text("Clipboard lock") },
+                        text = { Text("Set up a fingerprint or screen lock in Android settings to use the clipboard lock.") },
+                        confirmButton = { TextButton(onClick = { finish() }) { Text("OK") } }
+                    )
+                }
+            }
             return
         }
 

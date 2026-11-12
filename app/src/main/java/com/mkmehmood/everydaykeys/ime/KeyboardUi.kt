@@ -50,10 +50,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import com.mkmehmood.everydaykeys.design.StateLayer
 import com.mkmehmood.everydaykeys.design.m3Scheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import com.mkmehmood.everydaykeys.data.Prefs
@@ -119,8 +121,8 @@ internal fun keyHeight(p: Prefs): Float = (p.int("keyHeight").coerceIn(70, 140))
 class KbColors(
     val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color,
     val onAccent: Color,
-    val tile: Color = accent.copy(alpha = 0.15f), val onTile: Color = accent,
-    val accentContainer: Color = accent.copy(alpha = 0.15f), val onAccentContainer: Color = accent
+    val tile: Color, val onTile: Color, val accentContainer: Color, val onAccentContainer: Color,
+    val outline: Color, val outlineVariant: Color, val scrim: Color, val surfaceHighest: Color
 ) {
     companion object {
         fun of(dark: Boolean, accentName: String, style: String = "current", cs: ColorScheme): KbColors {
@@ -132,7 +134,8 @@ class KbColors(
                 panel = if (dark) cs.surfaceContainerHigh else cs.surfaceContainerLowest,
                 onAccent = cs.onPrimary,
                 tile = cs.secondaryContainer, onTile = cs.onSecondaryContainer,
-                accentContainer = cs.primaryContainer, onAccentContainer = cs.onPrimaryContainer
+                accentContainer = cs.primaryContainer, onAccentContainer = cs.onPrimaryContainer,
+                outline = cs.outline, outlineVariant = cs.outlineVariant, scrim = cs.scrim, surfaceHighest = cs.surfaceContainerHighest
             )
         }
     }
@@ -161,7 +164,8 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
     val c = if (bmp == null) base else {
         val a = p.int("bgKeyAlpha") / 100f
         KbColors(Color.Transparent, base.key.copy(alpha = a), base.keyAlt.copy(alpha = a), base.text, base.sub, base.accent, base.panel.copy(alpha = 0.92f), base.onAccent,
-            base.tile, base.onTile, base.accentContainer, base.onAccentContainer)
+            base.tile, base.onTile, base.accentContainer, base.onAccentContainer,
+            base.outline, base.outlineVariant, base.scrim, base.surfaceHighest)
     }
     val oh = p.str("oneHanded")
     val align = when (oh) { "left" -> Alignment.BottomStart; "right" -> Alignment.BottomEnd; else -> Alignment.BottomCenter }
@@ -176,7 +180,7 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
                     contentScale = ContentScale.Crop
                 )
             }
-            Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = p.int("bgDim") / 100f)))
+            Box(Modifier.matchParentSize().background(c.scrim.copy(alpha = p.int("bgDim") / 100f)))
         }
         // the move handle in resize mode slides the keys sideways inside the space the width setting frees up
         val shiftPx = (p.int("kbShift").coerceIn(-100, 100) / 100f * (1f - keyScale(p)) * rootW / 2f).toInt()
@@ -234,14 +238,15 @@ fun Key(
     val outline = style == "outline"
     val fg = if ((tone == 2 || active) && !outline) c.onAccent else c.text
     val shape = shapeOverride ?: keyShape(p)
+    // Material 3: outlined keys have no container; the pressed state is a 10% state layer of the content colour
     val fill = when {
-        outline -> base.copy(alpha = if (pressed) 0.45f else 0.14f)
-        pressed -> base.copy(alpha = 0.65f)
+        outline -> if (pressed) fg.copy(alpha = StateLayer.Pressed) else Color.Transparent
+        pressed -> fg.copy(alpha = StateLayer.Pressed).compositeOver(base)
         else -> base
     }
     // elevated key style: Material 3 level-1 elevation
     var m = (if (style == "raised") modifier.shadow(1.dp, shape) else modifier).clip(shape).background(fill)
-    if (outline) m = m.border(1.5.dp, if (tone == 2 || active) c.accent else c.sub.copy(alpha = 0.7f), shape)
+    if (outline) m = m.border(1.5.dp, if (tone == 2 || active) c.accent else c.outline, shape)
     m = m
         .semantics { contentDescription = desc; role = Role.Button; onClick(label = desc) { tap(); true } }
         .pointerInput(Unit) {
@@ -303,8 +308,8 @@ private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) 
     val shape = if (layoutStyle(svc.prefs) == "flat" || layoutStyle(svc.prefs) == "pro") RoundedCornerShape(50) else keyShape(svc.prefs)
     val outline = effStyle(svc.prefs) == "outline"
     Box(
-        modifier.clip(shape).background(if (outline) c.key.copy(alpha = 0.14f) else c.key)
-            .then(if (outline) Modifier.border(1.5.dp, c.sub.copy(alpha = 0.7f), shape) else Modifier)
+        modifier.clip(shape).background(if (outline) Color.Transparent else c.key)
+            .then(if (outline) Modifier.border(1.5.dp, c.outline, shape) else Modifier)
             .semantics { contentDescription = "Space. Swipe left or right to move the cursor."; role = Role.Button; onClick { svc.onChar(" "); true } }
             .pointerInput(Unit) { detectTapGestures(onPress = { svc.feedback() }, onTap = { svc.onChar(" ") }) }
             .pointerInput(Unit) {
@@ -666,7 +671,7 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
         if (showTools) { ToolIcons(svc, c); return@Row }
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
         items.forEachIndexed { i, s ->
-            if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.sub.copy(alpha = 0.4f)))
+            if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.outlineVariant))
             Text(
                 s, color = c.text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) }.padding(vertical = 8.dp)

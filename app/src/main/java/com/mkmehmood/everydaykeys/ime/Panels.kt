@@ -73,12 +73,11 @@ internal fun panelHeight(svc: EveryDayKeysService): Dp {
     return if (svc.keysHeightPx > 0) keysH + StripH else PanelHeight
 }
 
-/** The thin border colour used on cards and fields. */
 /** The keyboard's colours expressed as the shared design palette, so panels use the same pieces as Settings. */
 internal fun KbColors.palette() = Palette(
     surface = panel, text = text, sub = sub, accent = accent, onAccent = onAccent,
-    hairline = sub.copy(alpha = 0.30f), tile = tile, off = sub.copy(alpha = 0.55f), onTile = onTile,
-    trackOff = sub.copy(alpha = 0.25f), accentContainer = accentContainer, onAccentContainer = onAccentContainer
+    hairline = outlineVariant, tile = tile, off = outline, onTile = onTile,
+    trackOff = surfaceHighest, accentContainer = accentContainer, onAccentContainer = onAccentContainer
 )
 
 /** A plain icon (no box) for row starts and tools; accent when [filled], otherwise the quiet secondary colour. */
@@ -176,7 +175,7 @@ internal fun PanelChip(c: KbColors, text: String, selected: Boolean, desc: Strin
         colors = FilterChipDefaults.filterChipColors(
             labelColor = c.text, selectedContainerColor = c.tile, selectedLabelColor = c.onTile, selectedLeadingIconColor = c.onTile
         ),
-        border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = c.sub.copy(alpha = 0.6f))
+        border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = c.outline)
     )
 }
 
@@ -370,7 +369,7 @@ private fun ClipCard(c: KbColors, clip: Clip, selected: Boolean, onClick: () -> 
     Box(
         Modifier.fillMaxWidth().heightIn(min = 108.dp).clip(shape)
             .background(if (selected) c.accentContainer else c.panel)
-            .border(androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.sub.copy(alpha = 0.35f)), shape)
+            .border(androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.outlineVariant), shape)
             .combinedClickable(onLongClick = onLong, onClick = onClick)
     ) {
         Text(
