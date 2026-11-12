@@ -12,6 +12,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.clickable
@@ -84,7 +89,15 @@ fun AppTheme(content: @Composable () -> Unit) {
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
-    NavHost(nav, "home") {
+    // Material 3 "fade through" motion with the emphasized easing
+    val ease = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+    NavHost(
+        nav, "home",
+        enterTransition = { fadeIn(tween(210, 90, ease)) + scaleIn(tween(300, 0, ease), initialScale = 0.92f) },
+        exitTransition = { fadeOut(tween(90, 0, ease)) },
+        popEnterTransition = { fadeIn(tween(210, 90, ease)) + scaleIn(tween(300, 0, ease), initialScale = 0.92f) },
+        popExitTransition = { fadeOut(tween(90, 0, ease)) }
+    ) {
         composable("home") { HomeScreen(nav) }
         composable("s/{id}") { SectionScreen(it.arguments?.getString("id") ?: "lang", nav) }
         composable("snippets") { SnippetsScreen(nav) }

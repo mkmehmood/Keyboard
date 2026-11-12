@@ -33,6 +33,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.Typography
+import com.mkmehmood.everydaykeys.design.EveryDayKeysShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -138,6 +142,18 @@ class KbColors(
 
 @Composable
 fun KeyboardRoot(svc: EveryDayKeysService) {
+    val p = svc.prefs
+    val ctx0 = androidx.compose.ui.platform.LocalContext.current
+    val dark0 = when (p.str("theme")) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
+    // the keyboard is a Material 3 surface too: its panels use real Material 3 components that read this theme
+    MaterialTheme(
+        colorScheme = remember(dark0, p.bool("dynamicColor"), p.str("accent")) { m3Scheme(ctx0, dark0, p.bool("dynamicColor"), p.str("accent")) },
+        shapes = EveryDayKeysShapes, typography = Typography()
+    ) { KeyboardContent(svc) }
+}
+
+@Composable
+private fun KeyboardContent(svc: EveryDayKeysService) {
     val p = svc.prefs
     val dark = when (p.str("theme")) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -278,10 +294,9 @@ fun Key(
 
 @Composable
 internal fun IconTap(icon: Int, desc: String, c: KbColors, tint: Color = c.text, modifier: Modifier = Modifier.size(48.dp), onClick: () -> Unit) {
-    Box(
-        modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClickLabel = desc, role = Role.Button) { onClick() },
-        contentAlignment = Alignment.Center
-    ) { Icon(painterResource(icon), desc, tint = tint, modifier = Modifier.size(22.dp)) }
+    IconButton(onClick = onClick, modifier = modifier, colors = IconButtonDefaults.iconButtonColors(contentColor = tint)) {
+        Icon(painterResource(icon), desc, modifier = Modifier.size(22.dp))
+    }
 }
 
 @Composable
@@ -648,7 +663,7 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
         items.forEachIndexed { i, s ->
             if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.sub.copy(alpha = 0.4f)))
             Text(
-                s, color = c.text, fontSize = 18.sp, fontWeight = keyWeight(svc.prefs), fontFamily = keyFont(svc.prefs), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                s, color = c.text, style = MaterialTheme.typography.titleMedium, fontWeight = keyWeight(svc.prefs), fontFamily = keyFont(svc.prefs), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) }.padding(vertical = 8.dp)
             )
         }
