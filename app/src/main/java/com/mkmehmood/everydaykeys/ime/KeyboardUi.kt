@@ -333,9 +333,9 @@ private val KeyGap = 5.dp
  * whichever mode is showing. [rows] is the row count of the letter keyboard (5 with the number row, otherwise 4); the other
  * modes stretch or share that same frame instead of using sizes of their own.
  */
-private class Grid(val unit: Dp, val uh: Dp, val rows: Int) {
-    val width: Dp get() = unit * 10 + KeyGap * 9
-    val height: Dp get() = uh * rows + KeyGap * (rows - 1)
+private class Grid(val unit: Dp, val uh: Dp, val rows: Int, val extraHeight: Dp = 0.dp, val fullWidth: Dp? = null) {
+    val width: Dp get() = fullWidth ?: (unit * 10 + KeyGap * 9)
+    val height: Dp get() = uh * rows + KeyGap * (rows - 1) + extraHeight
     fun w(span: Float): Dp = unit * span + KeyGap * (span - 1f)
     /** Height of one row when [n] equal rows fill the whole frame. */
     fun rowH(n: Int): Dp = (height - KeyGap * (n - 1)) / n
@@ -407,7 +407,9 @@ private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
         if (it == "auto" || it.isEmpty()) when (layoutStyle(p)) { "raised" -> "top"; "flat" -> "left"; "pro" -> "circles"; else -> "classic" } else it
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val grid = kbGrid(maxWidth, p)
+        // the number pad fills the whole keyboard: the full width, and the height of the letter keys plus the strip the other screens give up
+        val g0 = kbGrid(maxWidth, p)
+        val grid = Grid(g0.unit, g0.uh, g0.rows, extraHeight = StripH, fullWidth = maxWidth)
         if (kind == "top" || kind == "left" || kind == "circles") NumpadVariant(svc, c, kind, grid) else NumpadClassic(svc, c, grid)
     }
 }
