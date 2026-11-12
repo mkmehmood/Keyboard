@@ -531,8 +531,9 @@ private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, grid: Grid) {
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    Key(svc, c, Modifier.weight(1f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
-                    Row(Modifier.weight(1f), horizontalArrangement = gap) {
+                    // the first two columns hold !?# (30), 0 (30) and 00 (70) in that proportion
+                    Row(Modifier.weight(2f), horizontalArrangement = gap) {
+                        Key(svc, c, Modifier.weight(0.3f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
                         Key(svc, c, Modifier.weight(0.3f).height(kh), "0", label = "0") { svc.onChar("0") }
                         Key(svc, c, Modifier.weight(0.7f).height(kh), "Double zero", label = "00") { svc.commitText("00") }
                     }
