@@ -318,52 +318,79 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                     svc.pasteClips(list.filter { it.id in selected }); selected = emptySet()
                 }
             }
-        } else Row(verticalAlignment = Alignment.CenterVertically) {
-            PanelSearch(svc, c, "Search clipboard", Modifier.weight(1f), flat = true) {
-                if (!svc.searching) {
-                    if (confirmClear) Button(
-                        onClick = { scope.launch { svc.clips.clearUnpinned() }; confirmClear = false },
-                        modifier = Modifier.padding(end = 6.dp).height(32.dp).semantics { contentDescription = "Confirm: clear all unpinned items" },
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent)
-                    ) { Text("Clear all?", maxLines = 1) }
-                    else IconTap(R.drawable.ic_trash, "Clear all unpinned items", c, c.sub, Modifier.size(40.dp)) { confirmClear = true }
-                }
-            }
-            if (svc.searching) IconTap(R.drawable.ic_close, "Stop searching", c, c.sub) { svc.searching = false; svc.query = "" }
+        } else if (svc.searching) Row(verticalAlignment = Alignment.CenterVertically) {
+            PanelSearch(svc, c, "Search clipboard", Modifier.weight(1f), flat = true)
+            IconTap(R.drawable.ic_close, "Stop searching", c, c.sub) { svc.searching = false; svc.query = "" }
+        } else PanelHeader(c, "Clipboard", "Back to keyboard", { svc.closePanel() }) {
+            IconTap(R.drawable.ic_search, "Search clipboard", c, c.text) { svc.searching = true }
+            if (confirmClear) Button(
+                onClick = { scope.launch { svc.clips.clearUnpinned() }; confirmClear = false },
+                modifier = Modifier.padding(end = 4.dp).height(32.dp).semantics { contentDescription = "Confirm: clear all unpinned items" },
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent)
+            ) { Text("Clear all?", maxLines = 1) }
+            else IconTap(R.drawable.ic_trash, "Clear all unpinned items", c, c.text) { confirmClear = true }
+            IconTap(R.drawable.ic_settings, "Clipboard and keyboard settings", c, c.text) { svc.openSettings() }
         }
-        PanelGroup(c, Modifier.weight(1f)) {
-            if (list.isEmpty()) PanelEmpty(c, R.drawable.ic_clipboard, when { svc.query.isNotEmpty() -> "No matches"; else -> "Nothing copied yet. Copy some text and it shows up here. No size limit, and it stays on this phone." })
-            else LazyColumn(Modifier.fillMaxSize().padding(6.dp)) {
-                itemsIndexed(list, key = { _, clip -> clip.id }) { i, clip ->
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (list.isEmpty()) PanelGroup(c, Modifier.fillMaxSize()) {
+                PanelEmpty(c, R.drawable.ic_clipboard, when { svc.query.isNotEmpty() -> "No matches"; else -> "Nothing copied yet. Copy some text and it shows up here. No size limit, and it stays on this phone." })
+            }
+            else LazyVerticalGrid(
+                GridCells.Fixed(2), Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(list, key = { it.id }) { clip ->
                     val isSel = clip.id in selected
-                    val first = clip.preview.lineSequence().firstOrNull { it.isNotBlank() } ?: clip.preview
-                    val large = clip.filePath != null
-                    val link = clip.preview.startsWith("http")
-                    val kind = when {
-                        large -> "Large item, ${clip.length / 1000} K characters, stored as a file"
-                        link -> "Link"
-                        else -> "Text, %,d characters".format(clip.length)
-                    }
-                    val sub = if (clip.pinned) "Pinned, $kind" else kind
-                    if (i > 0) PanelDivider(c)
-                    PanelRow(
-                        c, null, first, sub, selected = isSel,
-                        onLong = { selected = if (isSel) selected - clip.id else selected + clip.id },
+                    val toggle = { selected = if (isSel) selected - clip.id else selected + clip.id }
+                    ClipCard(
+                        c, clip, isSel,
                         onClick = {
-                            if (selected.isNotEmpty()) selected = if (isSel) selected - clip.id else selected + clip.id
+                            if (selected.isNotEmpty()) toggle()
                             else if (svc.prefs.bool("clipPreview")) preview = clip
                             else svc.pasteClips(listOf(clip))
-                        }
-                    ) {
-                        IconTap(R.drawable.ic_pin, if (clip.pinned) "Unpin" else "Pin", c, if (clip.pinned) c.accent else c.sub, Modifier.size(40.dp)) {
-                            scope.launch { svc.clips.setPinned(clip, !clip.pinned) }
-                        }
-                        IconTap(R.drawable.ic_trash, "Delete", c, c.sub, Modifier.size(40.dp)) { scope.launch { svc.clips.delete(clip) } }
-                    }
+                        },
+                        onLong = toggle,
+                        onPin = { scope.launch { svc.clips.setPinned(clip, !clip.pinned) } },
+                        onDelete = { scope.launch { svc.clips.delete(clip) } },
+                        onSelect = toggle
+                    )
                 }
             }
         }
+    }
+}
+
+/** One clipboard item as a bordered Material 3 card: text on top, a three-dot menu top right, the pin bottom right. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ClipCard(c: KbColors, clip: Clip, selected: Boolean, onClick: () -> Unit, onLong: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onSelect: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val text = clip.preview.trim().ifEmpty { "(empty)" }
+    val shape = Dim.Card
+    Box(
+        Modifier.fillMaxWidth().heightIn(min = 108.dp).clip(shape)
+            .background(if (selected) c.accentContainer else c.panel)
+            .border(androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.sub.copy(alpha = 0.35f)), shape)
+            .combinedClickable(onLongClick = onLong, onClick = onClick)
+    ) {
+        Text(
+            text, color = if (selected) c.onAccentContainer else c.text, style = MaterialTheme.typography.bodyMedium, maxLines = 5, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 48.dp, top = 14.dp, bottom = 46.dp)
+        )
+        Box(Modifier.align(Alignment.TopEnd)) {
+            IconTap(R.drawable.ic_more, "More options", c, c.text, Modifier.size(40.dp)) { menu = true }
+            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text(if (clip.pinned) "Unpin" else "Pin") }, onClick = { menu = false; onPin() })
+                androidx.compose.material3.DropdownMenuItem(text = { Text(if (selected) "Deselect" else "Select") }, onClick = { menu = false; onSelect() })
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
+            }
+        }
+        IconTap(R.drawable.ic_pin, if (clip.pinned) "Unpin" else "Pin", c, if (clip.pinned) c.accent else c.text, Modifier.align(Alignment.BottomEnd).size(44.dp)) { onPin() }
+        if (clip.length > 200 || clip.filePath != null) Text(
+            "%,d chars".format(clip.length), color = c.sub, style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 14.dp)
+        )
     }
 }
 
@@ -439,29 +466,39 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
 internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
     val recents = svc.prefs.str("recentEmoji").split(" ").filter { it.isNotBlank() }
     val q = svc.query.trim().lowercase()
-    val items = if (q.isEmpty()) (recents + Emojis.all.map { it.first }).distinct()
-    else Emojis.all.filter { it.second.contains(q) }.map { it.first }
+    var onlyRecent by remember { mutableStateOf(false) }
+    val items = when {
+        q.isNotEmpty() -> Emojis.all.filter { it.second.contains(q) }.map { it.first }
+        onlyRecent -> recents
+        else -> (recents + Emojis.all.map { it.first }).distinct()
+    }
     Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (svc.searching) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconTap(R.drawable.ic_back, "Stop searching", c) { svc.searching = false; svc.query = "" }
-                PanelSearch(svc, c, "Search emoji", Modifier.weight(1f))
-            }
-        } else {
-            PanelHeader(c, "Emoji", "Back to keyboard", { svc.closePanel() }) {
-                IconTap(R.drawable.ic_search, "Search emoji", c, c.sub) { svc.searching = true }
-            }
+        // a search pill with a trailing round arrow button, as in the reference keyboard
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PanelSearch(svc, c, "Search emojis", Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            Surface(
+                onClick = { svc.feedback(); if (svc.searching) { svc.searching = false; svc.query = "" } else svc.closePanel() },
+                shape = CircleShape, color = c.key, modifier = Modifier.size(44.dp).semantics { contentDescription = "Back to keyboard" }
+            ) { Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_right), null, tint = c.text, modifier = Modifier.size(22.dp)) } }
         }
-        PanelGroup(c, Modifier.weight(1f)) {
-            if (items.isEmpty()) PanelEmpty(c, R.drawable.ic_emoji, "No emoji match")
-            else LazyVerticalGrid(GridCells.Fixed(8), Modifier.fillMaxSize().padding(4.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (items.isEmpty()) PanelEmpty(c, R.drawable.ic_emoji, if (onlyRecent && q.isEmpty()) "No recent emoji yet" else "No emoji match")
+            else LazyVerticalGrid(GridCells.Fixed(8), Modifier.fillMaxSize()) {
                 items(items) { e ->
                     Surface(
                         onClick = { svc.commitEmoji(e) }, color = Color.Transparent,
-                        modifier = Modifier.height(42.dp).semantics { contentDescription = "Insert emoji $e" }
+                        modifier = Modifier.height(46.dp).semantics { contentDescription = "Insert emoji $e" }
                     ) { Box(contentAlignment = Alignment.Center) { Text(e, style = MaterialTheme.typography.headlineSmall) } }
                 }
             }
+        }
+        if (!svc.searching) Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconTap(R.drawable.ic_keyboard, "Back to letters", c, c.text, Modifier.weight(1f).height(44.dp)) { svc.closePanel() }
+            IconTap(R.drawable.ic_search, "Search emojis", c, c.text, Modifier.weight(1f).height(44.dp)) { svc.searching = true }
+            IconTap(R.drawable.ic_history, "Recent emoji", c, if (onlyRecent) c.accent else c.text, Modifier.weight(1f).height(44.dp)) { onlyRecent = true }
+            IconTap(R.drawable.ic_emoji, "All emoji", c, if (!onlyRecent) c.accent else c.text, Modifier.weight(1f).height(44.dp)) { onlyRecent = false }
+            IconTap(R.drawable.ic_backspace, "Backspace", c, c.text, Modifier.weight(1f).height(44.dp)) { svc.onBackspace() }
         }
     }
 }
