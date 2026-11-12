@@ -531,10 +531,10 @@ private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, grid: Grid) {
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    // the first two columns hold !?# (30), 0 (30) and 00 (70) in that proportion
+                    // the first two columns hold !?# (40), 0 (40) and 00 (70) in that proportion
                     Row(Modifier.weight(2f), horizontalArrangement = gap) {
-                        Key(svc, c, Modifier.weight(0.3f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
-                        Key(svc, c, Modifier.weight(0.3f).height(kh), "0", label = "0") { svc.onChar("0") }
+                        Key(svc, c, Modifier.weight(0.4f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
+                        Key(svc, c, Modifier.weight(0.4f).height(kh), "0", label = "0") { svc.onChar("0") }
                         Key(svc, c, Modifier.weight(0.7f).height(kh), "Double zero", label = "00") { svc.commitText("00") }
                     }
                     Row(Modifier.weight(1f), horizontalArrangement = gap) {
@@ -562,27 +562,28 @@ private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val rows = if (numRow) Layouts.symPagesWithNumberRow[page] else Layouts.symPages[page]
     val gap = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val grid = kbGrid(maxWidth, svc.prefs)
-        val uh = grid.uh
-        fun w(span: Float) = grid.w(span)
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KeyGap), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (numRow) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                "1234567890".forEach { d -> val k = d.toString(); Key(svc, c, Modifier.size(w(1f), uh), k, label = k) { svc.typeSymbol(k) } }
+        // symbols fill the whole keyboard: the full width, and the height of the letter keys plus the strip the other screens give up
+        val g0 = kbGrid(maxWidth, svc.prefs)
+        val total = g0.height + StripH
+        val full = Arrangement.spacedBy(KeyGap)
+        Column(Modifier.fillMaxWidth().height(total), verticalArrangement = full) {
+            if (numRow) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = full) {
+                "1234567890".forEach { d -> val k = d.toString(); Key(svc, c, Modifier.weight(1f).fillMaxHeight(), k, label = k) { svc.typeSymbol(k) } }
             }
             rows.forEachIndexed { i, row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    row.forEach { k -> Key(svc, c, Modifier.size(w(1f), uh), k, label = k) { svc.typeSymbol(k) } }
-                    if (i == 2) Key(svc, c, Modifier.size(w(10f - row.size), uh), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = full) {
+                    row.forEach { k -> Key(svc, c, Modifier.weight(1f).fillMaxHeight(), k, label = k) { svc.typeSymbol(k) } }
+                    if (i == 2) Key(svc, c, Modifier.weight(10f - row.size).fillMaxHeight(), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                Key(svc, c, Modifier.size(w(1.2f), uh), "Back to letters", icon = R.drawable.ic_keyboard, tone = 1) { svc.mode = Mode.LETTERS }
-                Key(svc, c, Modifier.size(w(1.2f), uh), "Next symbol page (${page + 1} of ${symModes.size})", icon = R.drawable.ic_swap, tone = 1) {
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = full) {
+                Key(svc, c, Modifier.weight(1.2f).fillMaxHeight(), "Back to letters", icon = R.drawable.ic_keyboard, tone = 1) { svc.mode = Mode.LETTERS }
+                Key(svc, c, Modifier.weight(1.2f).fillMaxHeight(), "Next symbol page (${page + 1} of ${symModes.size})", icon = R.drawable.ic_swap, tone = 1) {
                     svc.mode = symModes[(page + 1) % symModes.size]
                 }
-                Key(svc, c, Modifier.size(w(1.2f), uh), "Number pad", icon = R.drawable.ic_numpad, tone = 1) { svc.mode = Mode.NUMPAD }
-                SpaceKey(svc, c, Modifier.size(w(5.1f), uh))
-                Key(svc, c, Modifier.size(w(1.3f), uh), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
+                Key(svc, c, Modifier.weight(1.2f).fillMaxHeight(), "Number pad", icon = R.drawable.ic_numpad, tone = 1) { svc.mode = Mode.NUMPAD }
+                SpaceKey(svc, c, Modifier.weight(5.1f).fillMaxHeight())
+                Key(svc, c, Modifier.weight(1.3f).fillMaxHeight(), "Enter", icon = R.drawable.ic_enter, tone = 2) { svc.onEnter() }
             }
         }
     }
