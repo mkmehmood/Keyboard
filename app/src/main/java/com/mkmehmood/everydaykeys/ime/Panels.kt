@@ -466,14 +466,17 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
 internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
     val recents = svc.prefs.str("recentEmoji").split(" ").filter { it.isNotBlank() }
     val q = svc.query.trim().lowercase()
-    var onlyRecent by remember { mutableStateOf(false) }
+    // -1 is the recent tab, 0 and up are the categories
+    var tab by remember { mutableStateOf(if (recents.isEmpty()) 0 else -1) }
     val items = when {
         q.isNotEmpty() -> Emojis.all.filter { it.second.contains(q) }.map { it.first }
-        onlyRecent -> recents
-        else -> (recents + Emojis.all.map { it.first }).distinct()
+        tab < 0 -> recents
+        else -> Emojis.byCategory[tab].map { it.first }
     }
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    LaunchedEffect(tab) { gridState.scrollToItem(0) }
     Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // a search pill with a trailing round arrow button, as in the reference keyboard
+        // a search pill with a trailing round arrow button
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelSearch(svc, c, "Search emojis", Modifier.weight(1f))
             Spacer(Modifier.width(6.dp))
@@ -483,8 +486,8 @@ internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
             ) { Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_right), null, tint = c.text, modifier = Modifier.size(22.dp)) } }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (items.isEmpty()) PanelEmpty(c, R.drawable.ic_emoji, if (onlyRecent && q.isEmpty()) "No recent emoji yet" else "No emoji match")
-            else LazyVerticalGrid(GridCells.Fixed(8), Modifier.fillMaxSize()) {
+            if (items.isEmpty()) PanelEmpty(c, R.drawable.ic_emoji, if (tab < 0 && q.isEmpty()) "No recent emoji yet" else "No emoji match")
+            else LazyVerticalGrid(GridCells.Fixed(8), Modifier.fillMaxSize(), state = gridState) {
                 items(items) { e ->
                     Surface(
                         onClick = { svc.commitEmoji(e) }, color = Color.Transparent,
@@ -494,11 +497,28 @@ internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
             }
         }
         if (!svc.searching) Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconTap(R.drawable.ic_keyboard, "Back to letters", c, c.text, Modifier.weight(1f).height(44.dp)) { svc.closePanel() }
-            IconTap(R.drawable.ic_search, "Search emojis", c, c.text, Modifier.weight(1f).height(44.dp)) { svc.searching = true }
-            IconTap(R.drawable.ic_history, "Recent emoji", c, if (onlyRecent) c.accent else c.text, Modifier.weight(1f).height(44.dp)) { onlyRecent = true }
-            IconTap(R.drawable.ic_emoji, "All emoji", c, if (!onlyRecent) c.accent else c.text, Modifier.weight(1f).height(44.dp)) { onlyRecent = false }
-            IconTap(R.drawable.ic_backspace, "Backspace", c, c.text, Modifier.weight(1f).height(44.dp)) { svc.onBackspace() }
+            IconTap(R.drawable.ic_keyboard, "Back to letters", c, c.text, Modifier.width(48.dp).height(44.dp)) { svc.closePanel() }
+            IconTap(R.drawable.ic_search, "Search emojis", c, c.text, Modifier.width(48.dp).height(44.dp)) { svc.searching = true }
+            LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                item {
+                    EmojiTab(c, tab == -1, "Recent emoji", { tab = -1 }) { Icon(painterResource(R.drawable.ic_history), null, tint = if (tab == -1) c.accent else c.text, modifier = Modifier.size(22.dp)) }
+                }
+                itemsIndexed(Emojis.categoryNames) { i, name ->
+                    EmojiTab(c, tab == i, name, { tab = i }) { Text(Emojis.categoryGlyphs[i], style = MaterialTheme.typography.titleLarge) }
+                }
+            }
+            IconTap(R.drawable.ic_backspace, "Backspace", c, c.text, Modifier.width(48.dp).height(44.dp)) { svc.onBackspace() }
+        }
+    }
+}
+
+/** A bottom bar tab: the icon with an accent underline when it is the open category. */
+@Composable
+private fun EmojiTab(c: KbColors, selected: Boolean, desc: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Surface(onClick = onClick, color = Color.Transparent, modifier = Modifier.width(44.dp).height(44.dp).semantics { contentDescription = desc }) {
+        Box(contentAlignment = Alignment.Center) {
+            content()
+            if (selected) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).width(24.dp).height(3.dp).clip(CircleShape).background(c.accent))
         }
     }
 }
