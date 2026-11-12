@@ -30,6 +30,12 @@ object Layouts {
 
     val symPages = listOf(sym1, sym2, sym3, sym4)
 
+    /**
+     * Width (as a layout weight) of the backspace key that closes the third symbol row: the space left of a ten key row.
+     * Compose throws on a weight of zero or less, and pages 3 and 4 have ten keys in that row, so it never goes below 1.5.
+     */
+    fun backspaceWeight(keysInRow: Int): Float = maxOf(10f - keysInRow, 1.5f)
+
     /** Same pages for when the digit row is shown above them; page 1 swaps its own digits for a row of extra symbols. */
     val symPagesWithNumberRow = listOf(listOf(sym1[1], sym1[2], r("% = \\ | < > [ ]")), sym2, sym3, sym4)
 
