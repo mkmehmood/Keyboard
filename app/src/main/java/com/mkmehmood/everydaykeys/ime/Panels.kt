@@ -81,8 +81,6 @@ internal fun KbColors.palette() = Palette(
     trackOff = sub.copy(alpha = 0.25f), accentContainer = accentContainer, onAccentContainer = onAccentContainer
 )
 
-private fun hair(c: KbColors) = c.palette().hairline
-
 /** A plain icon (no box) for row starts and tools; accent when [filled], otherwise the quiet secondary colour. */
 @Composable
 internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean = false) {
@@ -104,14 +102,14 @@ internal fun PanelHeader(c: KbColors, title: String, backDesc: String, onBack: (
     Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
         IconTap(R.drawable.ic_back, backDesc, c) { onBack() }
         Text(
-            title, color = c.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            title, color = c.text, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(start = 2.dp)
         )
         trailing()
     }
 }
 
-/** Card with a hairline border. Put rows inside it and separate them with [PanelDivider]. */
+/** Filled card. Put rows inside it and separate them with [PanelDivider]. */
 @Composable
 internal fun PanelGroup(c: KbColors, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) = DsGroup(c.palette(), modifier, content)
 
@@ -251,11 +249,11 @@ internal fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelTile(c, R.drawable.ic_clipboard)
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text("Pasting a large document", color = c.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text("Pasting a large document", color = c.text, style = MaterialTheme.typography.titleMedium)
                 Text("Sent in small chunks so nothing is cut off", color = c.sub, style = MaterialTheme.typography.bodySmall)
             }
             Text(
-                "${(pr * 100).toInt()}%", color = c.onAccentContainer, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                "${(pr * 100).toInt()}%", color = c.onAccentContainer, style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.clip(CircleShape).background(c.accentContainer).padding(horizontal = 10.dp, vertical = 5.dp)
             )
             IconTap(R.drawable.ic_close, "Cancel paste", c) { svc.cancelPaste() }
@@ -281,7 +279,7 @@ private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
         PanelGroup(c, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 PanelTile(c, R.drawable.ic_lock, 48.dp, true)
-                Text("Clipboard history is locked", color = c.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+                Text("Clipboard history is locked", color = c.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp))
                 Text("Use your fingerprint or screen lock to open it.", color = c.sub, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                 PanelButton(svc, c, "Unlock", R.drawable.ic_lock, true, Modifier.fillMaxWidth(0.7f)) { svc.requestUnlock() }
             }
@@ -314,7 +312,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
             // picking several: how many, and one button to paste them together
             Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconTap(R.drawable.ic_close, "Clear selection", c) { selected = emptySet() }
-                Text("${selected.size} selected", color = c.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+                Text("${selected.size} selected", color = c.text, style = MaterialTheme.typography.titleMedium, maxLines = 1, modifier = Modifier.weight(1f))
                 PanelButton(svc, c, "Paste all", R.drawable.ic_clipboard, true, Modifier.width(124.dp)) {
                     svc.pasteClips(list.filter { it.id in selected }); selected = emptySet()
                 }
@@ -441,7 +439,7 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
             when {
                 all.isEmpty() -> Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     PanelTile(c, R.drawable.ic_snippet, 44.dp)
-                    Text("No snippets yet", color = c.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+                    Text("No snippets yet", color = c.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp))
                     Text("Save text you type often, then insert it with one tap or a shortcut like ;addr.", color = c.sub, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                     PanelButton(svc, c, "Add a snippet", R.drawable.ic_add, true, Modifier.fillMaxWidth(0.7f)) { svc.openSettings() }
                 }
@@ -654,7 +652,7 @@ private fun QuickCycle(svc: EveryDayKeysService, c: KbColors, icon: Int, title: 
 
 @Composable
 private fun QuickLabel(c: KbColors, text: String) =
-    Text(text, color = c.sub, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+    Text(text, color = c.sub, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
 
 /** The switches people reach for while typing, as tiles: tap to turn on or off. Grouped by what they change. */
 @Composable

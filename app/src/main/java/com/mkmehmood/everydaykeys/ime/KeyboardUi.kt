@@ -118,7 +118,7 @@ internal fun keyHeight(p: Prefs): Float = (p.int("keyHeight").coerceIn(70, 140))
  */
 class KbColors(
     val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color,
-    val onAccent: Color = Color.White,
+    val onAccent: Color,
     val tile: Color = accent.copy(alpha = 0.15f), val onTile: Color = accent,
     val accentContainer: Color = accent.copy(alpha = 0.15f), val onAccentContainer: Color = accent
 ) {
