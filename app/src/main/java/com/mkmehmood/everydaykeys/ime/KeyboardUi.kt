@@ -87,7 +87,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Height of the suggestion strip. It is always reserved so the keyboard does not jump while typing. */
-private val StripH = 48.dp
+internal val StripH = 48.dp
 
 /** Key look chosen in settings: corner shape, font and weight. */
 internal fun layoutStyle(p: Prefs): String = p.str("layoutStyle")
@@ -187,7 +187,15 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
             if (n != null) NoticeBar(c, n)
             else if (svc.panel == Panel.NONE && svc.mode == Mode.LETTERS) Strip(svc, c)
             when (svc.panel) {
-                Panel.NONE -> Box(Modifier.onSizeChanged { svc.keysHeightPx = it.height }) { Keys(svc, c, h) }
+                Panel.NONE -> {
+                    // the letter pad sets the keyboard's height (strip + keys); the number pad and symbols grow to the same height so the keyboard never shrinks
+                    val letters = svc.mode == Mode.LETTERS
+                    val minH = with(LocalDensity.current) { (svc.keysHeightPx.toDp() + StripH).takeIf { svc.keysHeightPx > 0 && !letters } ?: 0.dp }
+                    Box(
+                        Modifier.fillMaxWidth().heightIn(min = minH).then(if (letters) Modifier.onSizeChanged { svc.keysHeightPx = it.height } else Modifier),
+                        contentAlignment = Alignment.Center
+                    ) { Keys(svc, c, h) }
+                }
                 Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.SNIPPETS -> { SnippetPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
                 Panel.EMOJI -> { EmojiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }

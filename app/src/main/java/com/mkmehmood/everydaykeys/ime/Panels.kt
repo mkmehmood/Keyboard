@@ -69,7 +69,8 @@ private val PanelHeight = 270.dp
 @Composable
 internal fun panelHeight(svc: EveryDayKeysService): Dp {
     val keysH = with(androidx.compose.ui.platform.LocalDensity.current) { svc.keysHeightPx.toDp() }
-    return if (svc.keysHeightPx > 0) keysH else PanelHeight
+    // the letter pad is the strip plus the keys; panels fill all of it, so the keyboard keeps its height
+    return if (svc.keysHeightPx > 0) keysH + StripH else PanelHeight
 }
 
 /** The thin border colour used on cards and fields. */
