@@ -22,13 +22,17 @@ Tip: long-press the number-pad key to open symbols.
 
 Glide typing and floating keyboard mode. Both need testing on real devices to tune, so they are not shipped yet.
 
-## Design system
+## Design system (Material 3)
 
-Settings and everything the keyboard shows above the keys are built from one set of pieces in `design/Design.kt`
-(cards, tiles, rows, toggles, buttons, notes, notices). The keyboard and Settings only differ in the colours they feed in.
-While typing you get the same look for the clipboard, snippets, emoji, converter, cursor keys, paste progress and the new
-**Quick settings** panel (enable it under Settings, Toolbar). Copy, cut, paste, select all, undo and redo each show a short
-confirmation over the keyboard.
+The whole app follows Material 3.
+
+- **Colour:** Material You dynamic colour on Android 12+ (follows your wallpaper; switch it off under Settings, Appearance). Otherwise the exact Material 3 tonal palette for the accent you pick (teal, blue, purple, orange), light and dark (`design/Schemes.kt`, generated with Google's material-color-utilities). Surface containers, primary / secondary / tertiary containers and outline roles are used the way the spec describes.
+- **Settings app:** large collapsing top app bar, filled cards, list items with tonal circular leading icons, pill search bar, switches with a check icon, single-choice and confirm dialogs, filled / tonal / outlined buttons, and an extended FAB for adding snippets.
+- **Keyboard:** keys are tonal surfaces on a surface-container background, function keys use the secondary container, the action key uses the primary colour, and key corners follow the Material 3 shape scale (12 dp by default). Clipboard, snippets, emoji, converter, cursor keys and Quick settings use the same pieces: filled cards, pill search, filter chips, tonal tiles and a snackbar-style confirmation for copy, cut, paste, select all, undo and redo.
+- **Icons:** Material Symbols (Rounded), including a themed (monochrome) launcher icon for Android 13+.
+- **Code:** `design/Theme.kt` (theme, shapes, dynamic colour), `design/Design.kt` (shared cards, tiles, buttons, switches, notices used by both Settings and the keyboard), `ui/SettingsKit.kt` (Settings scaffold and components).
+
+The three older "Design 1/2/3" layout styles are still available as optional presets under Appearance.
 
 ## Build
 

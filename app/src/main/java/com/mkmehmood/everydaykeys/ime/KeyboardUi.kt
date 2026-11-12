@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -37,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import com.mkmehmood.everydaykeys.design.m3Scheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -88,10 +91,10 @@ internal fun keyShape(p: Prefs): Shape = when (layoutStyle(p)) {
 }
 private fun keyShapeUser(p: Prefs): Shape = when (p.str("keyShape")) {
     "square" -> RectangleShape
-    "slight" -> RoundedCornerShape(4.dp)
-    "soft" -> RoundedCornerShape(14.dp)
-    "round" -> RoundedCornerShape(50)
-    else -> RoundedCornerShape(8.dp)
+    "slight" -> RoundedCornerShape(4.dp)    // shape.extraSmall
+    "soft" -> RoundedCornerShape(16.dp)     // shape.large
+    "round" -> RoundedCornerShape(50)       // full
+    else -> RoundedCornerShape(12.dp)       // shape.medium, the Material 3 default
 }
 internal fun keyFont(p: Prefs): FontFamily = when (p.str("keyFont")) {
     "serif" -> FontFamily.Serif; "mono" -> FontFamily.Monospace; "cursive" -> FontFamily.Cursive; else -> FontFamily.Default
@@ -103,19 +106,34 @@ internal fun keyScale(p: Prefs): Float = (p.int("keyScale").coerceIn(60, 100)) /
 /** Key height as a fraction, 0.7 to 1.4. Width stays the same, so this only makes the rows taller or shorter. */
 internal fun keyHeight(p: Prefs): Float = (p.int("keyHeight").coerceIn(70, 140)) / 100f
 
-class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color, val onAccent: Color = Color.White) {
+/**
+ * The keyboard's colours. In the default "current" style they are Material 3 roles taken from [ColorScheme]
+ * (Material You dynamic colour, or the tonal palette of the chosen accent): surface container behind the keys,
+ * tonal keys, secondary-container function keys and a primary action key.
+ */
+class KbColors(
+    val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color,
+    val onAccent: Color = Color.White,
+    val tile: Color = accent.copy(alpha = 0.15f), val onTile: Color = accent,
+    val accentContainer: Color = accent.copy(alpha = 0.15f), val onAccentContainer: Color = accent
+) {
     companion object {
-        fun of(dark: Boolean, accentName: String, style: String = "current"): KbColors {
+        fun of(dark: Boolean, accentName: String, style: String = "current", cs: ColorScheme): KbColors {
             when (style) {
                 "raised" -> return KbColors(Color(0xFF161C24), Color(0xFF313B49), Color(0xFF232B36), Color(0xFFE8ECF1), Color(0xFF9AA7B6), Color(0xFF0E7C7B), Color(0xFF1E252E))
                 "flat" -> return KbColors(Color(0xFFE8ECF1), Color.White, Color(0xFFCFD8E2), Color(0xFF18222E), Color(0xFF5A6978), Color(0xFF0B6E6D), Color.White)
                 "pro" -> return KbColors(Color(0xFF0A0D11), Color(0xFF1A2129), Color(0xFF262F39), Color(0xFFF2F5F8), Color(0xFF8A98A6), Color(0xFF2DD4BF), Color(0xFF141A21), Color(0xFF04201D))
             }
-            val acc = when (accentName) {
-                "blue" -> Color(0xFF2563EB); "purple" -> Color(0xFF7C3AED); "orange" -> Color(0xFFC2410C); else -> Color(0xFF0E7C7B)
-            }
-            return if (dark) KbColors(Color(0xFF161C24), Color(0xFF2E3744), Color(0xFF232B36), Color(0xFFE8ECF1), Color(0xFF9AA7B6), acc, Color(0xFF1E252E))
-            else KbColors(Color(0xFFD5DCE3), Color.White, Color(0xFFBFC9D3), Color(0xFF101C28), Color(0xFF4A5A69), acc, Color.White)
+            return KbColors(
+                bg = cs.surfaceContainer,
+                key = if (dark) cs.surfaceContainerHighest else cs.surfaceContainerLowest,
+                keyAlt = cs.secondaryContainer,
+                text = cs.onSurface, sub = cs.onSurfaceVariant, accent = cs.primary,
+                panel = if (dark) cs.surfaceContainerHigh else cs.surfaceContainerLowest,
+                onAccent = cs.onPrimary,
+                tile = cs.secondaryContainer, onTile = cs.onSecondaryContainer,
+                accentContainer = cs.primaryContainer, onAccentContainer = cs.onPrimaryContainer
+            )
         }
     }
 }
@@ -125,11 +143,13 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
     val p = svc.prefs
     val dark = when (p.str("theme")) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val base = remember(dark, p.str("accent"), p.str("layoutStyle")) { KbColors.of(dark, p.str("accent"), p.str("layoutStyle")) }
+    val scheme = remember(dark, p.bool("dynamicColor"), p.str("accent")) { m3Scheme(ctx, dark, p.bool("dynamicColor"), p.str("accent")) }
+    val base = remember(scheme, p.str("layoutStyle")) { KbColors.of(dark, p.str("accent"), p.str("layoutStyle"), scheme) }
     val bmp = remember(p.str("bgOn"), p.str("bgVersion")) { if (p.bool("bgOn")) KbBackground.load(ctx) else null }
     val c = if (bmp == null) base else {
         val a = p.int("bgKeyAlpha") / 100f
-        KbColors(Color.Transparent, base.key.copy(alpha = a), base.keyAlt.copy(alpha = a), base.text, base.sub, base.accent, base.panel.copy(alpha = 0.92f), base.onAccent)
+        KbColors(Color.Transparent, base.key.copy(alpha = a), base.keyAlt.copy(alpha = a), base.text, base.sub, base.accent, base.panel.copy(alpha = 0.92f), base.onAccent,
+            base.tile, base.onTile, base.accentContainer, base.onAccentContainer)
     }
     val oh = p.str("oneHanded")
     val align = when (oh) { "left" -> Alignment.BottomStart; "right" -> Alignment.BottomEnd; else -> Alignment.BottomCenter }
@@ -252,7 +272,7 @@ fun Key(
             val bubble = RoundedCornerShape(12.dp)
             Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -lift)) {
                 Box(
-                    Modifier.size(52.dp, 64.dp).clip(bubble).background(c.key).border(1.dp, c.sub.copy(alpha = 0.4f), bubble),
+                    Modifier.size(52.dp, 64.dp).shadow(6.dp, bubble).clip(bubble).background(c.key),
                     contentAlignment = Alignment.Center
                 ) { Text(label, color = c.text, fontSize = 30.sp, fontWeight = keyWeight(p), fontFamily = keyFont(p)) }
             }

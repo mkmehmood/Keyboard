@@ -15,10 +15,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,8 +50,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // Every screen that opens above the keyboard (clipboard, snippets, emoji, converter, cursor keys, paste progress, translation)
-// uses the same look as the Settings screens: grouped cards with hairline borders,
-// rounded tiles with an accent icon, 12dp fields and buttons.
+// uses the same Material 3 look as the Settings screens: filled cards, tonal circular icon containers,
+// pill search and buttons, filter chips.
 
 internal val PanelCard = Dim.Card
 internal val PanelField = Dim.Field
@@ -61,7 +63,8 @@ private val PanelHeight = 270.dp
 /** The keyboard's colours expressed as the shared design palette, so panels use the same pieces as Settings. */
 internal fun KbColors.palette() = Palette(
     surface = panel, text = text, sub = sub, accent = accent, onAccent = onAccent,
-    hairline = sub.copy(alpha = 0.30f), tile = accent.copy(alpha = 0.15f), off = sub.copy(alpha = 0.55f)
+    hairline = sub.copy(alpha = 0.30f), tile = tile, off = sub.copy(alpha = 0.55f), onTile = onTile,
+    trackOff = sub.copy(alpha = 0.25f), accentContainer = accentContainer, onAccentContainer = onAccentContainer
 )
 
 private fun hair(c: KbColors) = c.palette().hairline
@@ -125,15 +128,15 @@ internal fun PanelRow(
 internal fun PanelSearch(svc: EveryDayKeysService, c: KbColors, hint: String, modifier: Modifier, flat: Boolean = false, trailing: @Composable RowScope.() -> Unit = {}) {
     val on = svc.searching
     Row(
-        modifier.height(if (flat) 40.dp else 44.dp).clip(PanelField).background(c.panel)
-            .then(if (flat && !on) Modifier else Modifier.border(if (on) 1.5.dp else 1.dp, if (on) c.accent else hair(c), PanelField))
-            .clickable { svc.searching = true }.padding(start = 12.dp, end = 2.dp),
+        modifier.height(if (flat) 40.dp else 44.dp).clip(CircleShape).background(c.key)
+            .then(if (on) Modifier.border(2.dp, c.accent, CircleShape) else Modifier)
+            .clickable { svc.searching = true }.padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(painterResource(R.drawable.ic_search), null, tint = c.sub, modifier = Modifier.size(20.dp))
         Text(
             if (svc.query.isEmpty()) hint else svc.query, color = if (svc.query.isEmpty()) c.sub else c.text,
-            fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
+            style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
         )
         if (svc.query.isNotEmpty()) IconTap(R.drawable.ic_close, "Clear search", c, c.sub, Modifier.size(40.dp)) { svc.query = "" }
         trailing()
@@ -147,12 +150,15 @@ internal fun PanelButton(svc: EveryDayKeysService, c: KbColors, text: String, ic
 
 @Composable
 internal fun PanelChip(c: KbColors, text: String, selected: Boolean, desc: String, onClick: () -> Unit) {
-    Text(
-        text, color = if (selected) c.onAccent else c.text, fontSize = 15.sp, maxLines = 1,
-        modifier = Modifier.heightIn(min = 40.dp).clip(PanelField).background(if (selected) c.accent else Color.Transparent)
-            .then(if (selected) Modifier else Modifier.border(1.dp, hair(c), PanelField))
-            .clickable(onClickLabel = desc) { onClick() }.padding(horizontal = 14.dp, vertical = 9.dp)
-    )
+    Row(
+        Modifier.heightIn(min = 40.dp).clip(Dim.Chip).background(if (selected) c.tile else Color.Transparent)
+            .then(if (selected) Modifier else Modifier.border(1.dp, c.sub.copy(alpha = 0.6f), Dim.Chip))
+            .clickable(onClickLabel = desc) { onClick() }.padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (selected) { Icon(painterResource(R.drawable.ic_check), null, tint = c.onTile, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
+        Text(text, color = if (selected) c.onTile else c.text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+    }
 }
 
 /** Small grey note under a card, with an icon. */
@@ -176,8 +182,7 @@ internal fun PanelEmpty(c: KbColors, icon: Int, text: String) {
 @Composable
 internal fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayKeysService.Trans) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 3.dp).heightIn(min = 44.dp).clip(PanelField).background(c.panel)
-            .border(1.dp, hair(c), PanelField).padding(start = 8.dp),
+        Modifier.fillMaxWidth().padding(vertical = 3.dp).heightIn(min = 44.dp).clip(PanelField).background(c.panel).padding(start = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         PanelTile(c, R.drawable.ic_translate, 30.dp)
@@ -188,8 +193,8 @@ internal fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayK
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         )
         if (tr.target.isNotBlank()) Text(
-            Translator.nameOf(tr.target), color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-            modifier = Modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(10.dp)).background(c.accent.copy(alpha = 0.15f))
+            Translator.nameOf(tr.target), color = c.onAccentContainer, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            modifier = Modifier.padding(horizontal = 2.dp).clip(CircleShape).background(c.accentContainer)
                 .clickable { svc.feedback(); svc.nextTranslateTarget() }.padding(horizontal = 10.dp, vertical = 6.dp)
         )
         IconTap(R.drawable.ic_close, "Dismiss translation", c) { svc.dismissTranslation() }
@@ -202,7 +207,7 @@ internal fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip
     val text = item.preview.replace(Regex("\\s+"), " ").trim()
     Row(
         Modifier.weight(if (wide) 1f else 1.15f).padding(horizontal = 3.dp).height(38.dp)
-            .clip(PanelField).background(c.panel).border(1.dp, hair(c), PanelField)
+            .clip(CircleShape).background(c.panel)
             .clickable(onClickLabel = "Paste last copied") { svc.feedback(); svc.pasteClips(listOf(item)) }
             .padding(start = 6.dp, end = if (wide) 2.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -219,7 +224,7 @@ internal fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip
 @Composable
 internal fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
     val pr = svc.progress ?: 0f
-    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(PanelCard).background(c.panel).border(1.dp, hair(c), PanelCard).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(PanelCard).background(c.panel).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelTile(c, R.drawable.ic_clipboard)
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
@@ -227,13 +232,13 @@ internal fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
                 Text("Sent in small chunks so nothing is cut off", color = c.sub, fontSize = 12.5.sp)
             }
             Text(
-                "${(pr * 100).toInt()}%", color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.accent.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 5.dp)
+                "${(pr * 100).toInt()}%", color = c.onAccentContainer, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(CircleShape).background(c.accentContainer).padding(horizontal = 10.dp, vertical = 5.dp)
             )
             IconTap(R.drawable.ic_close, "Cancel paste", c) { svc.cancelPaste() }
         }
         LinearProgressIndicator(
-            progress = pr, color = c.accent, trackColor = c.accent.copy(alpha = 0.15f),
+            progress = { pr }, color = c.accent, trackColor = c.accentContainer,
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(6.dp).clip(RoundedCornerShape(3.dp))
         )
     }
@@ -295,7 +300,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
                 if (!svc.searching) {
                     if (confirmClear) Text(
                         "Clear all?", color = c.onAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                        modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(10.dp)).background(c.accent)
+                        modifier = Modifier.padding(end = 6.dp).clip(CircleShape).background(c.accent)
                             .clickable(onClickLabel = "Confirm: clear all unpinned items") { scope.launch { svc.clips.clearUnpinned() }; confirmClear = false }
                             .padding(horizontal = 12.dp, vertical = 7.dp)
                     )
@@ -395,8 +400,8 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
                         if (i > 0) PanelDivider(c)
                         PanelRow(c, null, s.title, s.body.replace(Regex("\\s+"), " ").take(60), onClick = { svc.feedback(); svc.commitText(s.body); svc.closePanel() }) {
                             if (s.shortcut.isNotBlank()) Text(
-                                s.shortcut, color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                                modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.accent.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 4.dp)
+                                s.shortcut, color = c.onAccentContainer, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.accentContainer).padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
                     }
@@ -524,11 +529,10 @@ internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 private fun QuickBox(c: KbColors, icon: Int, title: String, sub: String, active: Boolean, modifier: Modifier) {
     val p = c.palette()
     Row(
-        modifier.height(64.dp).clip(Dim.Card).background(if (active) p.tile else p.surface)
-            .border(1.dp, if (active) p.accent else p.hairline, Dim.Card).padding(horizontal = 12.dp),
+        modifier.height(64.dp).clip(Dim.Card).background(if (active) p.accentContainer else p.surface).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(painterResource(icon), null, tint = if (active) p.accent else p.sub, modifier = Modifier.size(22.dp))
+        Icon(painterResource(icon), null, tint = if (active) p.onAccentContainer else p.sub, modifier = Modifier.size(22.dp))
         Column(Modifier.padding(start = 10.dp)) {
             Text(title, color = p.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(sub, color = p.sub, fontSize = 12.sp, maxLines = 1)

@@ -98,18 +98,19 @@ object Defs {
         Section("keystyle", "Key size, shape and font", "Resize by dragging, shape, style, font", R.drawable.ic_text, listOf(
             Action("resizeKb", "Resize keyboard", "Drag the edges on the keyboard itself, then tap OK. Reset there goes back to the default size"),
             Choice("keyShape", "Key shape", listOf("square" to "Square corners", "slight" to "Slightly rounded", "rounded" to "Rounded", "soft" to "Very rounded", "round" to "Round"), "rounded"),
-            Choice("keyStyle", "Key style", listOf("raised" to "Raised", "flat" to "Flat", "outline" to "Outline"), "raised"),
+            Choice("keyStyle", "Key style", listOf("flat" to "Tonal (Material 3)", "raised" to "Raised", "outline" to "Outline"), "flat"),
             Choice("keyFont", "Key font", listOf("sans" to "Sans-serif", "serif" to "Serif", "mono" to "Monospace", "cursive" to "Cursive"), "sans"),
             Choice("keyWeight", "Font weight", listOf("normal" to "Normal", "medium" to "Medium", "bold" to "Bold"), "medium"),
             Slide("fontSize", "Key font size", 12, 28, 20)
         )),
-        Section("appearance", "Appearance", "Theme, accent, background", R.drawable.ic_sun, listOf(
-            Choice("layoutStyle", "Layout style", listOf("current" to "Current (uses your own settings)", "raised" to "Design 1: dark, raised keys", "flat" to "Design 2: light, flat and airy", "pro" to "Design 3: dark, high contrast, symbol hints"), "current"),
+        Section("appearance", "Appearance", "Theme, Material You colors, background", R.drawable.ic_sun, listOf(
+            Choice("layoutStyle", "Layout style", listOf("current" to "Material 3 (uses your own settings)", "raised" to "Design 1: dark, raised keys", "flat" to "Design 2: light, flat and airy", "pro" to "Design 3: dark, high contrast, symbol hints"), "current"),
             Choice("numpadLayout", "Number pad layout", listOf("auto" to "Follow layout style", "classic" to "Classic", "top" to "Operators on top (Design 1)", "left" to "Operators on the left (Design 2)", "circles" to "Round keys (Design 3)"), "auto"),
             Toggle("keyHints", "Symbol hints on letter keys (long-press types them)", false),
-            Action("layoutNote", "Layout styles override theme, key shape and key style", "Choose Current to use your own settings. Add the Switch layout style tool in Toolbar to change style while typing."),
+            Action("layoutNote", "Layout styles override theme, key shape and key style", "Choose Material 3 to use your own settings. Add the Switch layout style tool in Toolbar to change style while typing."),
             Choice("theme", "Theme", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"), "system"),
-            Choice("accent", "Accent color", listOf("teal" to "Teal", "blue" to "Blue", "purple" to "Purple", "orange" to "Orange"), "teal"),
+            Toggle("dynamicColor", "Material You dynamic color (Android 12+, follows your wallpaper)", true),
+            Choice("accent", "Accent color (when Material You is off)", listOf("teal" to "Teal", "blue" to "Blue", "purple" to "Purple", "orange" to "Orange"), "teal"),
             Toggle("borders", "Key borders", false),
             Action("bgEdit", "Background image", "Choose a photo, crop, zoom, dim, blur"),
             Toggle("bgOn", "Show background image", false),
