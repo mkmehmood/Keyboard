@@ -578,7 +578,7 @@ private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
             rows.forEachIndexed { i, row ->
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = full) {
                     row.forEach { k -> Key(svc, c, Modifier.weight(1f).fillMaxHeight(), k, label = k) { svc.typeSymbol(k) } }
-                    if (i == 2) Key(svc, c, Modifier.weight(10f - row.size).fillMaxHeight(), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
+                    if (i == 2) Key(svc, c, Modifier.weight(Layouts.backspaceWeight(row.size)).fillMaxHeight(), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
                 }
             }
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = full) {
