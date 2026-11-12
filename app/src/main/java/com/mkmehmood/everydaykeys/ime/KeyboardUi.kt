@@ -438,7 +438,7 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
         when (kind) {
             "top" -> Column(Modifier.width(grid.width).align(Alignment.Center), verticalArrangement = gap) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    listOf("×" to "×", "÷" to "÷", "=" to "=", "%" to "%", "(" to "(", ")" to ")", "," to ",").forEach { (l, v) ->
+                    listOf("×" to "×", "÷" to "÷", "=" to "=", "%" to "%", "(" to "(", ")" to ")").forEach { (l, v) ->
                         NK(svc, c, Modifier.weight(1f).height(kh * 0.7f), l, 1) { if (v == "=") svc.onEquals() else svc.commitText(v) }
                     }
                 }
@@ -452,8 +452,8 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
                     NI(svc, c, Modifier.weight(1f).height(kh), R.drawable.ic_keyboard, "Back to letters. Long press for symbols.", 1, onLong = toSym) { toLetters() }
-                    NK(svc, c, Modifier.weight(1f).height(kh), "0") { svc.onChar("0") }
-                    NK(svc, c, Modifier.weight(1f).height(kh), "00", desc = "Double zero") { svc.commitText("00") }
+                    NK(svc, c, Modifier.weight(0.6f).height(kh), "0") { svc.onChar("0") }
+                    NK(svc, c, Modifier.weight(1.4f).height(kh), "00", desc = "Double zero") { svc.commitText("00") }
                     NK(svc, c, Modifier.weight(1f).height(kh), ".", 1, desc = "Decimal point") { svc.onChar(".") }
                     NI(svc, c, Modifier.weight(1f).height(kh), R.drawable.ic_enter, "Enter", 2) { svc.onEnter() }
                 }
@@ -469,8 +469,8 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                        NK(svc, c, Modifier.weight(1f).height(kh), "0") { svc.onChar("0") }
-                        NK(svc, c, Modifier.weight(1f).height(kh), "00", desc = "Double zero") { svc.commitText("00") }
+                        NK(svc, c, Modifier.weight(0.6f).height(kh), "0") { svc.onChar("0") }
+                        NK(svc, c, Modifier.weight(1.4f).height(kh), "00", desc = "Double zero") { svc.commitText("00") }
                         NK(svc, c, Modifier.weight(1f).height(kh), ".", 1, desc = "Decimal point") { svc.onChar(".") }
                     }
                 }
@@ -488,9 +488,8 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                        NK(svc, c, Modifier.weight(1f).height(kh), ",", 1, dig, "Comma") { svc.onChar(",") }
-                        NK(svc, c, Modifier.weight(1f).height(kh), "0", 0, dig) { svc.onChar("0") }
-                        NK(svc, c, Modifier.weight(1f).height(kh), "00", 0, dig, "Double zero") { svc.commitText("00") }
+                        NK(svc, c, Modifier.weight(0.6f).height(kh), "0", 0, dig) { svc.onChar("0") }
+                        NK(svc, c, Modifier.weight(1.4f).height(kh), "00", 0, dig, "Double zero") { svc.commitText("00") }
                         NK(svc, c, Modifier.weight(1f).height(kh), ".", 1, dig, "Decimal point") { svc.onChar(".") }
                     }
                 }
@@ -530,13 +529,10 @@ private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, grid: Grid) {
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                    Key(svc, c, Modifier.weight(1f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
                     Row(Modifier.weight(1f), horizontalArrangement = gap) {
-                        Key(svc, c, Modifier.weight(1f).height(kh), "Comma", label = ",", tone = 1) { svc.onChar(",") }
-                        Key(svc, c, Modifier.weight(1f).height(kh), "Symbols", label = "!?#", tone = 1) { svc.mode = Mode.SYM1 }
-                    }
-                    Row(Modifier.weight(1f), horizontalArrangement = gap) {
-                        Key(svc, c, Modifier.weight(1f).height(kh), "0", label = "0") { svc.onChar("0") }
-                        Key(svc, c, Modifier.weight(1f).height(kh), "Double zero", label = "00") { svc.commitText("00") }
+                        Key(svc, c, Modifier.weight(0.3f).height(kh), "0", label = "0") { svc.onChar("0") }
+                        Key(svc, c, Modifier.weight(0.7f).height(kh), "Double zero", label = "00") { svc.commitText("00") }
                     }
                     Row(Modifier.weight(1f), horizontalArrangement = gap) {
                         Key(svc, c, Modifier.weight(1f).height(kh), "Equals", label = "=", tone = 1) { svc.onEquals() }
