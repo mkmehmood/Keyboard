@@ -182,16 +182,10 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
         val shiftPx = (p.int("kbShift").coerceIn(-100, 100) / 100f * (1f - keyScale(p)) * rootW / 2f).toInt()
         Column(Modifier.fillMaxWidth(if (oh == "off") 1f else 0.78f).offset { IntOffset(shiftPx, 0) }.padding(horizontal = 4.dp, vertical = 4.dp)) {
             if (svc.progress != null) ProgressCard(svc, c)
-            // toolbar and suggestions sit directly on the keyboard background, with no panel behind them
-            Column(Modifier.fillMaxWidth()) {
-                val n = svc.notice
-                if (n != null) NoticeBar(c, n)
-                else if (svc.panel == Panel.NONE && svc.mode != Mode.NUMPAD) Strip(svc, c)
-                // the number pad has no suggestions, only the tool icons
-                else if (p.bool("showToolbar") || svc.panel != Panel.NONE) Toolbar(svc, c)
-                // keep the bar's height so the number pad is exactly as tall as the letters
-                else Spacer(Modifier.fillMaxWidth().height(StripH))
-            }
+            // only the letter pad has the suggestion strip; the number pad, symbols and every panel have nothing above their keys
+            val n = svc.notice
+            if (n != null) NoticeBar(c, n)
+            else if (svc.panel == Panel.NONE && svc.mode == Mode.LETTERS) Strip(svc, c)
             when (svc.panel) {
                 Panel.NONE -> Box(Modifier.onSizeChanged { svc.keysHeightPx = it.height }) { Keys(svc, c, h) }
                 Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
