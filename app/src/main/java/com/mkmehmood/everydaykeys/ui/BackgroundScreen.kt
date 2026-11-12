@@ -113,11 +113,10 @@ fun BackgroundScreen(nav: NavController) {
         nav.popBackStack()
     }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().padding(horizontal = 16.dp)) {
-        SettingsTopBar("Background image") { nav.popBackStack() }
+    SettingsScaffold("Background image", onBack = { nav.popBackStack() }) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(aspect).clip(RoundedCornerShape(16.dp)).background(Color(0xFF2B323B)).onSizeChanged { frame = it }
+                Modifier.fillMaxWidth().aspectRatio(aspect).clip(CardShape).background(MaterialTheme.colorScheme.surfaceContainerHighest).onSizeChanged { frame = it }
                     .pointerInput(src) {
                         detectTransformGestures { _, pan, gz, _ ->
                             if (src != null && frame.width > 0) {
@@ -129,7 +128,7 @@ fun BackgroundScreen(nav: NavController) {
                     }
             ) {
                 val b = src
-                if (b == null) Text("No photo yet", Modifier.align(Alignment.Center), color = Color.White.copy(alpha = .7f))
+                if (b == null) Text("No photo yet", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else {
                     val img = remember(b) { b.asImageBitmap() }
                     Box(Modifier.matchParentSize().clipToBounds()) {
@@ -153,8 +152,8 @@ fun BackgroundScreen(nav: NavController) {
                 }
             }
             Text("Pinch to zoom and drag to position. The frame matches the keyboard.", Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-            SecondaryButton(if (src == null) "Choose a photo" else "Choose another photo", null, Modifier.fillMaxWidth()) { picker.launch("image/*") }
-            Spacer(Modifier.height(12.dp))
+            TonalButton(if (src == null) "Choose a photo" else "Choose another photo", com.mkmehmood.everydaykeys.R.drawable.ic_upload, Modifier.fillMaxWidth()) { picker.launch("image/*") }
+            Spacer(Modifier.height(16.dp))
 
             GroupCard {
                 LabeledSlider("Zoom  %.1fx".format(zoom), zoom, 1f..5f) { zoom = it; clamp() }
@@ -166,19 +165,18 @@ fun BackgroundScreen(nav: NavController) {
                 LabeledSlider("Key opacity  ${keyAlpha.toInt()}%", keyAlpha, 30f..100f) { keyAlpha = it }
             }
 
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PrimaryButton("Save", null, Modifier.weight(1f)) { save() }
                 SecondaryButton("Remove", null, Modifier.weight(1f)) { remove() }
             }
         }
-        PreviewField(Modifier.padding(vertical = 12.dp))
     }
 }
 
 @Composable
 private fun LabeledSlider(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
-    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-        Slider(v, onChange, valueRange = range, colors = settingsSliderColors())
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Slider(v, onChange, valueRange = range)
     }
 }

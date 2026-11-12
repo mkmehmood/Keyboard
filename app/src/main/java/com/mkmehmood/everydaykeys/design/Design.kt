@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -17,136 +18,160 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.mkmehmood.everydaykeys.R
 
 /*
- * The one design system for Everyday Keys.
+ * The one design system for Everyday Keys, built to Material 3 specifications.
  *
  * The Settings screens and everything the keyboard shows above the keys (clipboard, snippets, emoji, converter,
- * cursor keys, quick settings, paste progress, action notices) are built from the pieces in this file, so a card,
- * tile, button, toggle or note looks and measures the same wherever it appears. Only the colours differ:
- * Settings feeds in [settingsPalette] (the Material theme), the keyboard feeds in its own palette (the key colours,
- * background picture and accent the user chose).
+ * cursor keys, quick settings, paste progress, action notices) use the pieces in this file, so a card, tonal icon,
+ * button, switch or note looks and measures the same wherever it appears. Only the colours differ:
+ * Settings feeds in [settingsPalette] (the Material 3 colour scheme), the keyboard feeds in a palette built from the
+ * same Material 3 roles (dynamic colour or the chosen accent) in [com.mkmehmood.everydaykeys.ime.KbColors].
  */
 
+/** Material 3 shape scale and sizes. */
 object Dim {
-    val Card = RoundedCornerShape(16.dp)
-    val Field = RoundedCornerShape(12.dp)
-    val TileShape = RoundedCornerShape(9.dp)
-    val Badge = RoundedCornerShape(10.dp)
-    val TileSize = 34.dp
+    val Card = RoundedCornerShape(16.dp)       // shape.large
+    val Field = RoundedCornerShape(12.dp)      // shape.medium
+    val Button = CircleShape                   // M3 buttons are fully rounded
+    val Chip = RoundedCornerShape(8.dp)        // shape.small
+    val TileShape = CircleShape                // leading icon container
+    val Badge = RoundedCornerShape(8.dp)
+    val TileSize = 40.dp
     val RowMin = 56.dp
+    val ButtonHeight = 40.dp
 }
 
+/** Material 3 colour roles the shared components need. */
 @Immutable
 class Palette(
-    val surface: Color,   // card and field background
-    val text: Color,
-    val sub: Color,       // secondary text and icons
-    val accent: Color,
-    val onAccent: Color,
-    val hairline: Color,  // 1dp borders and dividers
-    val tile: Color,      // background behind an accent icon
-    val off: Color        // switch track when off
+    val surface: Color,   // card background (surfaceContainer)
+    val text: Color,      // onSurface
+    val sub: Color,       // onSurfaceVariant
+    val accent: Color,    // primary
+    val onAccent: Color,  // onPrimary
+    val hairline: Color,  // outlineVariant
+    val tile: Color,      // container behind a leading icon (secondaryContainer)
+    val off: Color,       // outline: switch thumb and border when off
+    val onTile: Color = accent,        // icon on [tile] (onSecondaryContainer)
+    val trackOff: Color = hairline,    // switch track when off (surfaceContainerHighest)
+    val accentContainer: Color = tile, // tonal highlight (primaryContainer)
+    val onAccentContainer: Color = accent
 )
 
 @Composable
 fun settingsPalette(): Palette {
     val cs = MaterialTheme.colorScheme
-    return Palette(cs.surface, cs.onSurface, cs.onSurfaceVariant, cs.primary, cs.onPrimary, cs.outlineVariant, cs.primaryContainer, cs.outline)
+    return Palette(
+        surface = cs.surfaceContainer, text = cs.onSurface, sub = cs.onSurfaceVariant, accent = cs.primary, onAccent = cs.onPrimary,
+        hairline = cs.outlineVariant, tile = cs.secondaryContainer, off = cs.outline, onTile = cs.onSecondaryContainer,
+        trackOff = cs.surfaceContainerHighest, accentContainer = cs.primaryContainer, onAccentContainer = cs.onPrimaryContainer
+    )
 }
 
-/** Small rounded square with an accent icon. Used at the start of rows and for toolbar icons. */
+/** Circular tonal container with an icon: the Material 3 leading icon. Used at the start of rows and for toolbar icons. */
 @Composable
 fun DsTile(p: Palette, icon: Int, size: Dp = Dim.TileSize, filled: Boolean = false) {
     Box(
         Modifier.size(size).clip(Dim.TileShape).background(if (filled) p.accent else p.tile),
         contentAlignment = Alignment.Center
-    ) { Icon(painterResource(icon), null, tint = if (filled) p.onAccent else p.accent, modifier = Modifier.size(size * 0.6f)) }
+    ) { Icon(painterResource(icon), null, tint = if (filled) p.onAccent else p.onTile, modifier = Modifier.size(size * 0.6f)) }
 }
 
-/** White card with a hairline border. Put rows inside it and separate them with [DsDivider]. */
+/** Filled card (surface container, large shape, no border). Put rows inside it and separate them with [DsDivider]. */
 @Composable
 fun DsGroup(p: Palette, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(Dim.Card).background(p.surface).border(1.dp, p.hairline, Dim.Card), content = content)
+    Column(modifier.fillMaxWidth().clip(Dim.Card).background(p.surface), content = content)
 }
 
+/** Inset divider, as in Material 3 lists. */
 @Composable
-fun DsDivider(p: Palette) = Box(Modifier.fillMaxWidth().height(1.dp).background(p.hairline))
+fun DsDivider(p: Palette) = Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(p.hairline))
 
-/** Filled (primary) or outlined button. */
+/** Filled (primary) or outlined button. Fully rounded, Material 3 label style, optional leading icon. */
 @Composable
-fun DsButton(p: Palette, text: String, icon: Int?, primary: Boolean, modifier: Modifier = Modifier, height: Dp = 48.dp, onClick: () -> Unit) {
+fun DsButton(p: Palette, text: String, icon: Int?, primary: Boolean, modifier: Modifier = Modifier, height: Dp = Dim.ButtonHeight, onClick: () -> Unit) {
     val fg = if (primary) p.onAccent else p.accent
     Row(
-        modifier.height(height).clip(Dim.Field).background(if (primary) p.accent else Color.Transparent)
-            .then(if (primary) Modifier else Modifier.border(1.dp, p.hairline, Dim.Field))
-            .clickable(role = Role.Button) { onClick() }.padding(horizontal = 16.dp),
+        modifier.height(height).clip(Dim.Button).background(if (primary) p.accent else Color.Transparent)
+            .then(if (primary) Modifier else Modifier.border(1.dp, p.off, Dim.Button))
+            .clickable(role = Role.Button) { onClick() }.padding(start = if (icon != null) 16.dp else 24.dp, end = 24.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) { Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
-        Text(text, color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
-/** Small grey note with an icon, shown under a card. */
+/** Supporting note with an icon, shown under a card. */
 @Composable
 fun DsNote(p: Palette, icon: Int, text: String, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painterResource(icon), null, tint = p.sub, modifier = Modifier.size(14.dp))
-        Text(text, color = p.sub, fontSize = 12.5.sp, maxLines = 2, modifier = Modifier.padding(start = 6.dp))
+    Row(modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(icon), null, tint = p.sub, modifier = Modifier.size(16.dp))
+        Text(text, color = p.sub, style = MaterialTheme.typography.bodySmall, maxLines = 2, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
+/** Material 3 switch colours: primary track with on-primary thumb when on, outlined when off. */
 @Composable
 fun dsSwitchColors(p: Palette): SwitchColors = SwitchDefaults.colors(
-    checkedThumbColor = Color.White, checkedTrackColor = p.accent, checkedBorderColor = p.accent,
-    uncheckedThumbColor = Color.White, uncheckedTrackColor = p.off, uncheckedBorderColor = p.off
+    checkedThumbColor = p.onAccent, checkedTrackColor = p.accent, checkedBorderColor = p.accent, checkedIconColor = p.accent,
+    uncheckedThumbColor = p.off, uncheckedTrackColor = p.trackOff, uncheckedBorderColor = p.off, uncheckedIconColor = p.trackOff
 )
 
-/** A row with an optional tile, a title, an optional description and a switch. The whole row is the tap target. */
+/** Material 3 switch with the check icon in the thumb when on. */
+@Composable
+fun DsSwitch(p: Palette, checked: Boolean, onChange: ((Boolean) -> Unit)? = null) {
+    Switch(
+        checked, onChange, colors = dsSwitchColors(p),
+        thumbContent = if (checked) { { Icon(painterResource(R.drawable.ic_check), null, Modifier.size(SwitchDefaults.IconSize)) } } else null
+    )
+}
+
+/** A list item with an optional tonal icon, a headline, optional supporting text and a switch. The whole row is the tap target. */
 @Composable
 fun DsToggleRow(p: Palette, icon: Int?, title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = Dim.RowMin).toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
-            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (icon != null) { DsTile(p, icon); Spacer(Modifier.width(12.dp)) }
-        Column(Modifier.weight(1f).padding(end = 8.dp)) {
-            Text(title, color = p.text, fontSize = 15.sp)
-            if (sub != null) Text(sub, color = p.sub, fontSize = 12.5.sp)
+        if (icon != null) { DsTile(p, icon); Spacer(Modifier.width(16.dp)) }
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
+            Text(title, color = p.text, style = MaterialTheme.typography.bodyLarge)
+            if (sub != null) Text(sub, color = p.sub, style = MaterialTheme.typography.bodyMedium)
         }
-        Switch(checked, null, colors = dsSwitchColors(p))
+        DsSwitch(p, checked)
     }
 }
 
-/** One-line confirmation bar (Copied, Undo...) with an optional follow-up action. Read out by TalkBack. */
+/** One-line confirmation bar (Copied, Undo...) with an optional follow-up action: a tonal pill. Read out by TalkBack. */
 @Composable
 fun DsNotice(p: Palette, icon: Int, text: String, action: String? = null, onAction: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().fillMaxHeight().clip(Dim.Field).background(p.surface).border(1.dp, p.hairline, Dim.Field).padding(start = 12.dp),
+        modifier.fillMaxWidth().fillMaxHeight().clip(CircleShape).background(p.accentContainer).padding(start = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(painterResource(icon), null, tint = p.accent, modifier = Modifier.size(20.dp))
+        Icon(painterResource(icon), null, tint = p.onAccentContainer, modifier = Modifier.size(20.dp))
         Text(
-            text, color = p.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            text, color = p.onAccentContainer, style = MaterialTheme.typography.labelLarge, maxLines = 1,
             modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }
         )
         if (action != null && onAction != null) {
-            Box(Modifier.fillMaxHeight().clickable(role = Role.Button) { onAction() }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                Text(action, color = p.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Box(Modifier.fillMaxHeight().clip(CircleShape).clickable(role = Role.Button) { onAction() }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                Text(action, color = p.onAccentContainer, style = MaterialTheme.typography.labelLarge)
             }
-        } else Spacer(Modifier.width(12.dp))
+        } else Spacer(Modifier.width(16.dp))
     }
 }

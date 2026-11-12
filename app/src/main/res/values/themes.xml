@@ -1,4 +1,26 @@
 <resources>
-    <style name="Theme.EverydayKeys" parent="android:Theme.DeviceDefault.NoActionBar" />
-    <style name="Theme.Voice" parent="android:Theme.Translucent.NoTitleBar" />
+    <style name="Theme.EverydayKeys" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/m3_primary</item>
+        <item name="colorOnPrimary">@color/m3_on_primary</item>
+        <item name="colorPrimaryContainer">@color/m3_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/m3_on_primary_container</item>
+        <item name="colorSecondary">@color/m3_secondary</item>
+        <item name="colorSecondaryContainer">@color/m3_secondary_container</item>
+        <item name="colorSurface">@color/m3_surface</item>
+        <item name="colorOnSurface">@color/m3_on_surface</item>
+        <item name="colorSurfaceContainer">@color/m3_surface_container</item>
+        <item name="colorOutline">@color/m3_outline</item>
+        <item name="colorError">@color/m3_error</item>
+        <item name="android:colorBackground">@color/m3_surface</item>
+        <item name="android:windowBackground">@color/m3_surface</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <!-- Transparent helper screens (voice typing, unlock prompt) keep the Material 3 dialog and biometric styling -->
+    <style name="Theme.Voice" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

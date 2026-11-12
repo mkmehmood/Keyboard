@@ -29,8 +29,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -38,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import com.mkmehmood.everydaykeys.design.m3Scheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -89,10 +94,10 @@ internal fun keyShape(p: Prefs): Shape = when (layoutStyle(p)) {
 }
 private fun keyShapeUser(p: Prefs): Shape = when (p.str("keyShape")) {
     "square" -> RectangleShape
-    "slight" -> RoundedCornerShape(4.dp)
-    "soft" -> RoundedCornerShape(14.dp)
-    "round" -> RoundedCornerShape(50)
-    else -> RoundedCornerShape(8.dp)
+    "slight" -> RoundedCornerShape(4.dp)    // shape.extraSmall
+    "soft" -> RoundedCornerShape(16.dp)     // shape.large
+    "round" -> RoundedCornerShape(50)       // full
+    else -> RoundedCornerShape(12.dp)       // shape.medium, the Material 3 default
 }
 internal fun keyFont(p: Prefs): FontFamily = when (p.str("keyFont")) {
     "serif" -> FontFamily.Serif; "mono" -> FontFamily.Monospace; "cursive" -> FontFamily.Cursive; else -> FontFamily.Default
@@ -104,19 +109,29 @@ internal fun keyScale(p: Prefs): Float = (p.int("keyScale").coerceIn(60, 100)) /
 /** Key height as a fraction, 0.7 to 1.4. Width stays the same, so this only makes the rows taller or shorter. */
 internal fun keyHeight(p: Prefs): Float = (p.int("keyHeight").coerceIn(70, 140)) / 100f
 
-class KbColors(val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color, val onAccent: Color = Color.White) {
+/**
+ * The keyboard's colours, always Material 3 roles taken from [ColorScheme]
+ * (Material You dynamic colour, or the tonal palette of the chosen accent): surface container behind the keys,
+ * tonal keys, secondary-container function keys and a primary action key.
+ */
+class KbColors(
+    val bg: Color, val key: Color, val keyAlt: Color, val text: Color, val sub: Color, val accent: Color, val panel: Color,
+    val onAccent: Color = Color.White,
+    val tile: Color = accent.copy(alpha = 0.15f), val onTile: Color = accent,
+    val accentContainer: Color = accent.copy(alpha = 0.15f), val onAccentContainer: Color = accent
+) {
     companion object {
-        fun of(dark: Boolean, accentName: String, style: String = "current"): KbColors {
-            when (style) {
-                "raised" -> return KbColors(Color(0xFF161C24), Color(0xFF313B49), Color(0xFF232B36), Color(0xFFE8ECF1), Color(0xFF9AA7B6), Color(0xFF0E7C7B), Color(0xFF1E252E))
-                "flat" -> return KbColors(Color(0xFFE8ECF1), Color.White, Color(0xFFCFD8E2), Color(0xFF18222E), Color(0xFF5A6978), Color(0xFF0B6E6D), Color.White)
-                "pro" -> return KbColors(Color(0xFF0A0D11), Color(0xFF1A2129), Color(0xFF262F39), Color(0xFFF2F5F8), Color(0xFF8A98A6), Color(0xFF2DD4BF), Color(0xFF141A21), Color(0xFF04201D))
-            }
-            val acc = when (accentName) {
-                "blue" -> Color(0xFF2563EB); "purple" -> Color(0xFF7C3AED); "orange" -> Color(0xFFC2410C); else -> Color(0xFF0E7C7B)
-            }
-            return if (dark) KbColors(Color(0xFF161C24), Color(0xFF2E3744), Color(0xFF232B36), Color(0xFFE8ECF1), Color(0xFF9AA7B6), acc, Color(0xFF1E252E))
-            else KbColors(Color(0xFFD5DCE3), Color.White, Color(0xFFBFC9D3), Color(0xFF101C28), Color(0xFF4A5A69), acc, Color.White)
+        fun of(dark: Boolean, accentName: String, style: String = "current", cs: ColorScheme): KbColors {
+            return KbColors(
+                bg = cs.surfaceContainer,
+                key = if (dark) cs.surfaceContainerHighest else cs.surfaceContainerLowest,
+                keyAlt = cs.secondaryContainer,
+                text = cs.onSurface, sub = cs.onSurfaceVariant, accent = cs.primary,
+                panel = if (dark) cs.surfaceContainerHigh else cs.surfaceContainerLowest,
+                onAccent = cs.onPrimary,
+                tile = cs.secondaryContainer, onTile = cs.onSecondaryContainer,
+                accentContainer = cs.primaryContainer, onAccentContainer = cs.onPrimaryContainer
+            )
         }
     }
 }
@@ -126,11 +141,13 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
     val p = svc.prefs
     val dark = when (p.str("theme")) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val base = remember(dark, p.str("accent"), p.str("layoutStyle")) { KbColors.of(dark, p.str("accent"), p.str("layoutStyle")) }
+    val scheme = remember(dark, p.bool("dynamicColor"), p.str("accent")) { m3Scheme(ctx, dark, p.bool("dynamicColor"), p.str("accent")) }
+    val base = remember(scheme, p.str("layoutStyle")) { KbColors.of(dark, p.str("accent"), p.str("layoutStyle"), scheme) }
     val bmp = remember(p.str("bgOn"), p.str("bgVersion")) { if (p.bool("bgOn")) KbBackground.load(ctx) else null }
     val c = if (bmp == null) base else {
         val a = p.int("bgKeyAlpha") / 100f
-        KbColors(Color.Transparent, base.key.copy(alpha = a), base.keyAlt.copy(alpha = a), base.text, base.sub, base.accent, base.panel.copy(alpha = 0.92f), base.onAccent)
+        KbColors(Color.Transparent, base.key.copy(alpha = a), base.keyAlt.copy(alpha = a), base.text, base.sub, base.accent, base.panel.copy(alpha = 0.92f), base.onAccent,
+            base.tile, base.onTile, base.accentContainer, base.onAccentContainer)
     }
     val oh = p.str("oneHanded")
     val align = when (oh) { "left" -> Alignment.BottomStart; "right" -> Alignment.BottomEnd; else -> Alignment.BottomCenter }
@@ -169,7 +186,7 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
                 Panel.QUICK -> QuickPanel(svc, c)
             }
         }
-        if (p.bool("resizeMode")) ResizeOverlay(svc, Modifier.matchParentSize())
+        if (p.bool("resizeMode")) ResizeOverlay(svc, c, Modifier.matchParentSize())
     }
 }
 
@@ -204,12 +221,8 @@ fun Key(
         pressed -> base.copy(alpha = 0.65f)
         else -> base
     }
-    var m = modifier.clip(shape).background(fill)
-    if (style == "raised") m = m.drawBehind {
-        // 1dp lower edge gives each key a slight raised look.
-        val e = 1.dp.toPx()
-        drawRect(Color.Black.copy(alpha = 0.2f), topLeft = Offset(0f, size.height - e), size = Size(size.width, e))
-    }
+    // elevated key style: Material 3 level-1 elevation
+    var m = (if (style == "raised") modifier.shadow(1.dp, shape) else modifier).clip(shape).background(fill)
     if (outline) m = m.border(1.5.dp, if (tone == 2 || active) c.accent else c.sub.copy(alpha = 0.7f), shape)
     else if (p.bool("borders")) m = m.border(1.dp, c.sub.copy(alpha = 0.5f), shape)
     m = m
@@ -253,7 +266,7 @@ fun Key(
             val bubble = RoundedCornerShape(12.dp)
             Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -lift)) {
                 Box(
-                    Modifier.size(52.dp, 64.dp).clip(bubble).background(c.key).border(1.dp, c.sub.copy(alpha = 0.4f), bubble),
+                    Modifier.size(52.dp, 64.dp).shadow(6.dp, bubble).clip(bubble).background(c.key),
                     contentAlignment = Alignment.Center
                 ) { Text(label, color = c.text, fontSize = 30.sp, fontWeight = keyWeight(p), fontFamily = keyFont(p)) }
             }
@@ -618,19 +631,17 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
 
 // ---------------------------------------------------------------- resize mode
 
-private val ResizeBlue = Color(0xFF4169FF)
-
 /** One drag handle of the resize frame. [onDrag] gets the finger movement in pixels. */
 @Composable
-private fun ResizeHandle(desc: String, modifier: Modifier, bars: Boolean, vertical: Boolean, onDrag: (Float, Float) -> Unit) {
+private fun ResizeHandle(c: KbColors, desc: String, modifier: Modifier, bars: Boolean, vertical: Boolean, onDrag: (Float, Float) -> Unit) {
     Box(
-        modifier.clip(RoundedCornerShape(12.dp)).background(ResizeBlue).semantics { contentDescription = desc }
+        modifier.clip(RoundedCornerShape(12.dp)).background(c.accent).semantics { contentDescription = desc }
             .pointerInput(Unit) { detectDragGestures { change, d -> change.consume(); onDrag(d.x, d.y) } },
         contentAlignment = Alignment.Center
     ) {
-        if (bars && vertical) Column(verticalArrangement = Arrangement.spacedBy(5.dp)) { repeat(3) { Box(Modifier.size(28.dp, 3.dp).background(Color.White)) } }
-        else if (bars) Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) { repeat(2) { Box(Modifier.size(3.dp, 28.dp).background(Color.White)) } }
-        else Text("\u2725", color = Color.White, fontSize = 26.sp)
+        if (bars && vertical) Column(verticalArrangement = Arrangement.spacedBy(5.dp)) { repeat(3) { Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(c.onAccent)) } }
+        else if (bars) Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) { repeat(2) { Box(Modifier.size(3.dp, 28.dp).clip(CircleShape).background(c.onAccent)) } }
+        else Text("\u2725", color = c.onAccent, fontSize = 26.sp)
     }
 }
 
@@ -639,7 +650,7 @@ private fun ResizeHandle(desc: String, modifier: Modifier, bars: Boolean, vertic
  * the round handle moves the keys sideways. Reset goes back to the defaults and OK keeps what you see.
  */
 @Composable
-private fun ResizeOverlay(svc: EveryDayKeysService, modifier: Modifier) {
+private fun ResizeOverlay(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) {
     val p = svc.prefs
     var sz by remember { mutableStateOf(IntSize.Zero) }
     var hF by remember { mutableStateOf(p.int("keyHeight").toFloat()) }
@@ -652,22 +663,23 @@ private fun ResizeOverlay(svc: EveryDayKeysService, modifier: Modifier) {
     fun heightBy(dy: Float, sign: Float) = setH(hF + sign * dy / maxOf(sz.height, 1) * hF * 1.3f)
     fun widthBy(dx: Float, sign: Float) = setW(wF + sign * dx / maxOf(sz.width, 1) * wF * 2f)
     Box(
-        modifier.onSizeChanged { sz = it }.border(2.dp, ResizeBlue)
+        modifier.onSizeChanged { sz = it }.border(2.dp, c.accent)
             .pointerInput(Unit) { detectTapGestures { } } // swallow taps so keys under the frame are not typed while resizing
     ) {
-        ResizeHandle("Drag up or down to change the keyboard height", Modifier.align(Alignment.TopCenter).size(76.dp, 34.dp), true, true) { _, dy -> heightBy(dy, -1f) }
-        ResizeHandle("Drag up or down to change the keyboard height", Modifier.align(Alignment.BottomCenter).size(76.dp, 34.dp), true, true) { _, dy -> heightBy(dy, 1f) }
-        ResizeHandle("Drag sideways to change the keyboard width", Modifier.align(Alignment.CenterStart).size(30.dp, 72.dp), true, false) { dx, _ -> widthBy(dx, -1f) }
-        ResizeHandle("Drag sideways to change the keyboard width", Modifier.align(Alignment.CenterEnd).size(30.dp, 72.dp), true, false) { dx, _ -> widthBy(dx, 1f) }
-        ResizeHandle("Drag sideways to move the keyboard", Modifier.align(Alignment.Center).size(60.dp).clip(RoundedCornerShape(30.dp)), false, false) { dx, _ ->
+        ResizeHandle(c, "Drag up or down to change the keyboard height", Modifier.align(Alignment.TopCenter).size(76.dp, 34.dp), true, true) { _, dy -> heightBy(dy, -1f) }
+        ResizeHandle(c, "Drag up or down to change the keyboard height", Modifier.align(Alignment.BottomCenter).size(76.dp, 34.dp), true, true) { _, dy -> heightBy(dy, 1f) }
+        ResizeHandle(c, "Drag sideways to change the keyboard width", Modifier.align(Alignment.CenterStart).size(30.dp, 72.dp), true, false) { dx, _ -> widthBy(dx, -1f) }
+        ResizeHandle(c, "Drag sideways to change the keyboard width", Modifier.align(Alignment.CenterEnd).size(30.dp, 72.dp), true, false) { dx, _ -> widthBy(dx, 1f) }
+        ResizeHandle(c, "Drag sideways to move the keyboard", Modifier.align(Alignment.Center).size(60.dp).clip(RoundedCornerShape(30.dp)), false, false) { dx, _ ->
             setS(sF + dx / maxOf(sz.width, 1) * 200f)
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp), horizontalArrangement = Arrangement.spacedBy(48.dp)) {
             listOf("Reset", "OK").forEach { label ->
+                val ok = label == "OK"
                 Text(
-                    label, color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center,
-                    modifier = Modifier.width(112.dp).clip(RoundedCornerShape(50)).background(Color.White)
-                        .clickable(onClickLabel = if (label == "OK") "Keep this size" else "Reset the size", role = Role.Button) {
+                    label, color = if (ok) c.onAccent else c.onAccentContainer, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center,
+                    modifier = Modifier.width(112.dp).clip(RoundedCornerShape(50)).background(if (ok) c.accent else c.accentContainer)
+                        .clickable(onClickLabel = if (ok) "Keep this size" else "Reset the size", role = Role.Button) {
                             if (label == "Reset") { setH(100f); setW(100f); setS(0f); svc.setPref("keyHeight", "100"); svc.setPref("keyScale", "100"); svc.setPref("kbShift", "0") }
                             else svc.setPref("resizeMode", "false")
                         }.padding(vertical = 12.dp)
