@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -132,16 +131,22 @@ fun DsToggleRow(p: Palette, icon: Int?, title: String, sub: String?, checked: Bo
     }
 }
 
-/** Short confirmation shown over the keyboard after copy, cut, paste, select all, undo or redo. Read out by TalkBack. */
+/** One-line confirmation bar (Copied, Undo...) with an optional follow-up action. Read out by TalkBack. */
 @Composable
-fun DsNotice(p: Palette, icon: Int, text: String) {
+fun DsNotice(p: Palette, icon: Int, text: String, action: String? = null, onAction: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     Row(
-        Modifier.clip(Dim.Field).background(p.surface).border(1.dp, p.hairline, Dim.Field)
-            .semantics { liveRegion = LiveRegionMode.Polite; contentDescription = text }
-            .padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+        modifier.fillMaxWidth().fillMaxHeight().clip(Dim.Field).background(p.surface).border(1.dp, p.hairline, Dim.Field).padding(start = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        DsTile(p, icon, 28.dp)
-        Text(text, color = p.text, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+        Icon(painterResource(icon), null, tint = p.accent, modifier = Modifier.size(20.dp))
+        Text(
+            text, color = p.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }
+        )
+        if (action != null && onAction != null) {
+            Box(Modifier.fillMaxHeight().clickable(role = Role.Button) { onAction() }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                Text(action, color = p.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        } else Spacer(Modifier.width(12.dp))
     }
 }

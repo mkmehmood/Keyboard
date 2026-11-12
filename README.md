@@ -25,10 +25,11 @@ Glide typing and floating keyboard mode. Both need testing on real devices to tu
 ## Design system
 
 Settings and everything the keyboard shows above the keys are built from one set of pieces in `design/Design.kt`
-(cards, tiles, rows, toggles, buttons, notes, notices). The keyboard and Settings only differ in the colours they feed in.
+(cards, rows, toggles, buttons, notes, notices). The keyboard and Settings only differ in the colours they feed in.
 While typing you get the same look for the clipboard, snippets, emoji, converter, cursor keys, paste progress and the new
 **Quick settings** panel (enable it under Settings, Toolbar). Copy, cut, paste, select all, undo and redo each show a short
-confirmation over the keyboard.
+confirmation in the suggestion row, with a one-tap follow-up (Paste, Redo...). While text is selected the toolbar switches to
+select all, copy, cut, paste, undo and redo. The preview of a copied item uses the keyboard's full height.
 
 ## Build
 

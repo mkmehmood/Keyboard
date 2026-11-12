@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
 import com.mkmehmood.everydaykeys.R
 import com.mkmehmood.everydaykeys.design.*
 import com.mkmehmood.everydaykeys.data.AppDb
@@ -66,11 +67,15 @@ internal fun KbColors.palette() = Palette(
 
 private fun hair(c: KbColors) = c.palette().hairline
 
-/** Small rounded square with an accent icon, used at the start of rows and for the tool icons. */
+/** A plain icon (no box) for row starts and tools; accent when [filled], otherwise the quiet secondary colour. */
 @Composable
-internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean = false) = DsTile(c.palette(), icon, size, filled)
+internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean = false) {
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        Icon(painterResource(icon), null, tint = if (filled) c.accent else c.sub, modifier = Modifier.size(size * 0.65f))
+    }
+}
 
-/** A toolbar icon: the tile is the tap target. */
+/** A toolbar icon, 48dp tall tap target. */
 @Composable
 internal fun ToolTile(icon: Int, desc: String, c: KbColors, filled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(
@@ -158,10 +163,6 @@ internal fun PanelChip(c: KbColors, text: String, selected: Boolean, desc: Strin
 /** Small grey note under a card, with an icon. */
 @Composable
 internal fun PanelNote(c: KbColors, icon: Int, text: String) = DsNote(c.palette(), icon, text)
-
-/** Brief confirmation over the keyboard after copy, cut, paste, select all, undo or redo. It never blocks touches. */
-@Composable
-internal fun NoticePill(c: KbColors, n: EveryDayKeysService.Notice) = DsNotice(c.palette(), n.icon, n.text)
 
 @Composable
 internal fun PanelEmpty(c: KbColors, icon: Int, text: String) {
@@ -251,7 +252,7 @@ private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
     Column(Modifier.fillMaxWidth().height(PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         PanelGroup(c, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                PanelTile(c, R.drawable.ic_lock, 48.dp)
+                PanelTile(c, R.drawable.ic_lock, 48.dp, true)
                 Text("Clipboard history is locked", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
                 Text("Use your fingerprint or screen lock to open it.", color = c.sub, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                 PanelButton(svc, c, "Unlock", R.drawable.ic_lock, true, Modifier.fillMaxWidth(0.7f)) { svc.requestUnlock() }
