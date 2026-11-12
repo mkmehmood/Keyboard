@@ -99,7 +99,6 @@ object Defs {
             Action("resizeKb", "Resize keyboard", "Drag the edges on the keyboard itself, then tap OK. Reset there goes back to the default size"),
             Choice("keyShape", "Key shape", listOf("square" to "Square corners", "slight" to "Slightly rounded", "rounded" to "Rounded", "soft" to "Very rounded", "round" to "Round"), "rounded"),
             Choice("keyStyle", "Key style", listOf("flat" to "Tonal", "raised" to "Elevated", "outline" to "Outlined"), "flat"),
-            Choice("keyFont", "Key font", listOf("sans" to "Sans-serif", "serif" to "Serif", "mono" to "Monospace", "cursive" to "Cursive"), "sans"),
             Choice("keyWeight", "Font weight", listOf("normal" to "Normal", "medium" to "Medium", "bold" to "Bold"), "medium"),
             Slide("fontSize", "Key font size", 12, 28, 20)
         )),

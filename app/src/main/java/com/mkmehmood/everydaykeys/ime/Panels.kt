@@ -201,11 +201,12 @@ internal fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayK
     ) {
         PanelTile(c, R.drawable.ic_translate, 30.dp)
         val ok = tr.result != null
-        Text(
-            tr.result ?: tr.message.orEmpty(), color = if (ok) c.text else c.sub, style = if (ok) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).then(if (ok) Modifier.clickable { svc.feedback(); svc.applyTranslation() } else Modifier)
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-        )
+        Surface(onClick = { svc.feedback(); svc.applyTranslation() }, enabled = ok, color = Color.Transparent, modifier = Modifier.weight(1f)) {
+            Text(
+                tr.result ?: tr.message.orEmpty(), color = if (ok) c.text else c.sub, style = if (ok) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+            )
+        }
         if (tr.target.isNotBlank()) Surface(
             onClick = { svc.feedback(); svc.nextTranslateTarget() }, shape = CircleShape, color = c.accentContainer, contentColor = c.onAccentContainer,
             modifier = Modifier.padding(horizontal = 2.dp)
@@ -258,7 +259,7 @@ internal fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
         }
         LinearProgressIndicator(
             progress = { pr }, color = c.accent, trackColor = c.accentContainer,
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(6.dp).clip(RoundedCornerShape(3.dp))
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
         )
       }
     }
@@ -453,9 +454,10 @@ internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
             if (items.isEmpty()) PanelEmpty(c, R.drawable.ic_emoji, "No emoji match")
             else LazyVerticalGrid(GridCells.Fixed(8), Modifier.fillMaxSize().padding(4.dp)) {
                 items(items) { e ->
-                    Box(Modifier.height(42.dp).clickable(onClickLabel = "Insert emoji") { svc.commitEmoji(e) }, contentAlignment = Alignment.Center) {
-                        Text(e, fontSize = 24.sp)
-                    }
+                    Surface(
+                        onClick = { svc.commitEmoji(e) }, color = Color.Transparent,
+                        modifier = Modifier.height(42.dp).semantics { contentDescription = "Insert emoji $e" }
+                    ) { Box(contentAlignment = Alignment.Center) { Text(e, style = MaterialTheme.typography.headlineSmall) } }
                 }
             }
         }
