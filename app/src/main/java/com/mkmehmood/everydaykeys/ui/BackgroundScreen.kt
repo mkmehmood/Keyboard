@@ -116,7 +116,7 @@ fun BackgroundScreen(nav: NavController) {
     SettingsScaffold("Background image", onBack = { nav.popBackStack() }) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(aspect).clip(CardShape).background(Color(0xFF2B323B)).onSizeChanged { frame = it }
+                Modifier.fillMaxWidth().aspectRatio(aspect).clip(CardShape).background(MaterialTheme.colorScheme.surfaceContainerHighest).onSizeChanged { frame = it }
                     .pointerInput(src) {
                         detectTransformGestures { _, pan, gz, _ ->
                             if (src != null && frame.width > 0) {
@@ -128,7 +128,7 @@ fun BackgroundScreen(nav: NavController) {
                     }
             ) {
                 val b = src
-                if (b == null) Text("No photo yet", Modifier.align(Alignment.Center), color = Color.White.copy(alpha = .7f))
+                if (b == null) Text("No photo yet", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else {
                     val img = remember(b) { b.asImageBitmap() }
                     Box(Modifier.matchParentSize().clipToBounds()) {

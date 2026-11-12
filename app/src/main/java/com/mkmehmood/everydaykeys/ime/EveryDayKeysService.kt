@@ -690,7 +690,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         trans = null
         afterTyped()
     }
-    /** Cycle Current, Design 1, 2 and 3 so the layout can be compared without opening settings. */
+    /** Cycle the Standard, Compact, Pill and Round layout styles so the layout can be compared without opening settings. */
     fun cycleLayoutStyle() {
         val order = listOf("current", "raised", "flat", "pro")
         val next = order[(order.indexOf(prefs.str("layoutStyle")) + 1) % order.size]
