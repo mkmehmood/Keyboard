@@ -38,6 +38,9 @@ import com.mkmehmood.everydaykeys.R
  * same Material 3 roles (dynamic colour or the chosen accent) in [com.mkmehmood.everydaykeys.ime.KbColors].
  */
 
+/** Material 3 state layer opacity for the pressed state (spec value). */
+object StateLayer { const val Pressed = 0.10f }
+
 /** Material 3 shape scale and sizes. */
 object Dim {
     val Card = RoundedCornerShape(16.dp)       // shape.large

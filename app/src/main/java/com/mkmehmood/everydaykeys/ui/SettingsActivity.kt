@@ -76,13 +76,17 @@ class SettingsActivity : ComponentActivity() {
     }
 }
 
+/** The Material 3 theme only, with no background: for transparent helper screens that show a dialog. */
 @Composable
-fun AppTheme(content: @Composable () -> Unit) {
+fun AppColors(content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val p by remember { SettingsRepo.flow(ctx) }.collectAsState(initial = Prefs(emptyPreferences()))
-    EveryDayKeysTheme(dark = isSystemInDarkTheme(), dynamic = p.bool("dynamicColor"), accent = p.str("accent")) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface, content = content)
-    }
+    EveryDayKeysTheme(dark = isSystemInDarkTheme(), dynamic = p.bool("dynamicColor"), accent = p.str("accent"), content = content)
+}
+
+@Composable
+fun AppTheme(content: @Composable () -> Unit) = AppColors {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface, content = content)
 }
 
 @Composable

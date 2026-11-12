@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +52,8 @@ import kotlin.math.min
 fun BackgroundScreen(nav: NavController) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val scrimC = MaterialTheme.colorScheme.scrim
+    val keyC = MaterialTheme.colorScheme.let { if (isSystemInDarkTheme()) it.surfaceContainerHighest else it.surfaceContainerLowest }
     var src by remember { mutableStateOf<Bitmap?>(null) }
     var fresh by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -138,14 +141,14 @@ fun BackgroundScreen(nav: NavController) {
                         }
                     }
                     Canvas(Modifier.matchParentSize()) {
-                        drawRect(Color.Black.copy(alpha = dim / 100f))
+                        drawRect(scrimC.copy(alpha = dim / 100f))
                         // a sketch of the key rows so the key opacity can be judged
                         val rows = 4; val cols = 10; val padX = 8.dp.toPx(); val gap = 4.dp.toPx()
                         val top = size.height * 0.30f
                         val kw = (size.width - padX * 2 - gap * (cols - 1)) / cols
                         val kh = (size.height - top - 8.dp.toPx() - gap * (rows - 1)) / rows
                         for (r in 0 until rows) for (cI in 0 until cols) drawRoundRect(
-                            Color.White.copy(alpha = keyAlpha / 100f), Offset(padX + cI * (kw + gap), top + r * (kh + gap)), Size(kw, kh), CornerRadius(8.dp.toPx())
+                            keyC.copy(alpha = keyAlpha / 100f), Offset(padX + cI * (kw + gap), top + r * (kh + gap)), Size(kw, kh), CornerRadius(8.dp.toPx())
                         )
                     }
                 }
