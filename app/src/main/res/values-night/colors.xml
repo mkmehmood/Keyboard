@@ -1,4 +1,5 @@
 <resources>
+    <!-- Material 3 dark baseline (teal seed) used by the window before Compose draws, so dark mode does not flash light -->
     <color name="m3_primary">#80D5D3</color>
     <color name="m3_on_primary">#003737</color>
     <color name="m3_primary_container">#00504F</color>
