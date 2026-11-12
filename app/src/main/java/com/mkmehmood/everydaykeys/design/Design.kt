@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -157,17 +156,22 @@ fun DsToggleRow(p: Palette, icon: Int?, title: String, sub: String?, checked: Bo
     }
 }
 
-/** Short confirmation (Material 3 snackbar look) shown over the keyboard after copy, cut, paste, select all, undo or redo. Read out by TalkBack. */
+/** One-line confirmation bar (Copied, Undo...) with an optional follow-up action: a tonal pill. Read out by TalkBack. */
 @Composable
-fun DsNotice(p: Palette, icon: Int, text: String) {
-    val shape = RoundedCornerShape(12.dp)
+fun DsNotice(p: Palette, icon: Int, text: String, action: String? = null, onAction: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     Row(
-        Modifier.shadow(4.dp, shape).clip(shape).background(p.surface)
-            .semantics { liveRegion = LiveRegionMode.Polite; contentDescription = text }
-            .padding(start = 8.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+        modifier.fillMaxWidth().fillMaxHeight().clip(CircleShape).background(p.accentContainer).padding(start = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        DsTile(p, icon, 32.dp)
-        Text(text, color = p.text, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
+        Icon(painterResource(icon), null, tint = p.onAccentContainer, modifier = Modifier.size(20.dp))
+        Text(
+            text, color = p.onAccentContainer, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+            modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }
+        )
+        if (action != null && onAction != null) {
+            Box(Modifier.fillMaxHeight().clip(CircleShape).clickable(role = Role.Button) { onAction() }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                Text(action, color = p.onAccentContainer, style = MaterialTheme.typography.labelLarge)
+            }
+        } else Spacer(Modifier.width(16.dp))
     }
 }

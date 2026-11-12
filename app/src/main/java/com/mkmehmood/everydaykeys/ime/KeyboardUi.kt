@@ -7,6 +7,7 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import com.mkmehmood.everydaykeys.data.KbBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,7 +52,6 @@ import androidx.compose.ui.text.font.FontFamily
 import com.mkmehmood.everydaykeys.data.Prefs
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import android.view.KeyEvent
 import com.mkmehmood.everydaykeys.R
+import com.mkmehmood.everydaykeys.design.DsNotice
 import com.mkmehmood.everydaykeys.data.AppDb
 import com.mkmehmood.everydaykeys.data.Calc
 import com.mkmehmood.everydaykeys.data.Clip
@@ -169,7 +170,9 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
             if (svc.progress != null) ProgressCard(svc, c)
             // toolbar and suggestions sit directly on the keyboard background, with no panel behind them
             Column(Modifier.fillMaxWidth()) {
-                if (svc.panel == Panel.NONE && svc.mode != Mode.NUMPAD) Strip(svc, c)
+                val n = svc.notice
+                if (n != null) NoticeBar(c, n)
+                else if (svc.panel == Panel.NONE && svc.mode != Mode.NUMPAD) Strip(svc, c)
                 // the number pad has no suggestions, only the tool icons
                 else if (p.bool("showToolbar") || svc.panel != Panel.NONE) Toolbar(svc, c)
             }
@@ -184,8 +187,6 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
             }
         }
         if (p.bool("resizeMode")) ResizeOverlay(svc, c, Modifier.matchParentSize())
-        // confirmation for copy, cut, paste, select all, undo and redo; it has no touch handling, so keys underneath stay usable
-        svc.notice?.let { n -> Box(Modifier.matchParentSize().padding(top = 5.dp), contentAlignment = Alignment.TopCenter) { NoticePill(c, n) } }
     }
 }
 
@@ -557,6 +558,11 @@ private fun tool(id: String): Tool? = when (id) {
     "quick" -> Tool(R.drawable.ic_tune, "Quick settings") { it.togglePanel(Panel.QUICK) }
     "style" -> Tool(R.drawable.ic_sun, "Switch layout style") { it.cycleLayoutStyle() }
     "settings" -> Tool(R.drawable.ic_settings, "Settings") { it.openSettings() }
+    // shown instead of the configured tools while text is selected
+    "selectall" -> Tool(R.drawable.ic_select_all, "Select all") { it.selectAll() }
+    "copy" -> Tool(R.drawable.ic_copy, "Copy") { it.copy() }
+    "cut" -> Tool(R.drawable.ic_cut, "Cut") { it.cut() }
+    "paste" -> Tool(R.drawable.ic_paste, "Paste") { it.paste() }
     else -> null
 }
 
@@ -580,10 +586,17 @@ private fun ToolboxToggle(svc: EveryDayKeysService, c: KbColors, open: Boolean) 
 
 @Composable
 private fun RowScope.ToolIcons(svc: EveryDayKeysService, c: KbColors) {
-    val ids = svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
+    val ids = if (svc.hasSelection) listOf("selectall", "copy", "cut", "paste", "undo", "redo")
+    else svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
     Row(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         ids.forEach { id -> tool(id)?.let { t -> ToolTile(t.icon, t.desc, c, false, Modifier.weight(1f)) { svc.feedback(); t.run(svc) } } }
     }
+}
+
+/** Confirmation (Copied, Undo...) in place of the suggestions, with a quick follow-up action such as Paste or Redo. */
+@Composable
+private fun NoticeBar(c: KbColors, n: EveryDayKeysService.Notice) {
+    Box(Modifier.fillMaxWidth().height(StripH).padding(vertical = 4.dp)) { DsNotice(c.palette(), n.icon, n.text, n.action, n.onAction) }
 }
 
 /**
@@ -599,7 +612,7 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val pending = if (alts == null && svc.showClipChip) svc.pendingClip else null
     val hasToolbar = svc.prefs.bool("showToolbar")
     val noWords = items.isEmpty() && pending == null
-    val showTools = hasToolbar && alts == null && (svc.toolsOpen || noWords)
+    val showTools = hasToolbar && alts == null && (svc.toolsOpen || noWords || svc.hasSelection)
     if (!hasToolbar && noWords) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
     Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
         if (hasToolbar) ToolboxToggle(svc, c, open = showTools)
