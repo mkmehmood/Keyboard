@@ -25,6 +25,12 @@ jobs:
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleDebug --console=plain 2>&1 | tee build.log
 
+      - name: Show errors
+        if: failure()
+        shell: bash
+        run: |
+          grep -E "^e: |FAILED|What went wrong|AssertionError|^> " build.log | head -25 | while IFS= read -r l; do echo "::error::${l:0:800}"; done
+
       - name: Lint (informational)
         continue-on-error: true
         run: ./gradlew lintDebug --console=plain
