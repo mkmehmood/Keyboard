@@ -95,12 +95,10 @@ object Defs {
             Input("translateEmail", "Email for a higher free MyMemory limit (optional)"),
             Action("translateNote", "Sent only when you tap Translate", "The text you translate goes to the provider you chose. Nothing is sent automatically.")
         )),
-        Section("keystyle", "Key size, shape and font", "Resize by dragging, shape, style, font", R.drawable.ic_text, listOf(
+        Section("keystyle", "Key size, shape and style", "Resize by dragging, shape, style", R.drawable.ic_text, listOf(
             Action("resizeKb", "Resize keyboard", "Drag the edges on the keyboard itself, then tap OK. Reset there goes back to the default size"),
             Choice("keyShape", "Key shape", listOf("square" to "Square corners", "slight" to "Slightly rounded", "rounded" to "Rounded", "soft" to "Very rounded", "round" to "Round"), "rounded"),
-            Choice("keyStyle", "Key style", listOf("flat" to "Tonal", "raised" to "Elevated", "outline" to "Outlined"), "flat"),
-            Choice("keyWeight", "Font weight", listOf("normal" to "Normal", "medium" to "Medium", "bold" to "Bold"), "medium"),
-            Slide("fontSize", "Key font size", 12, 28, 20)
+            Choice("keyStyle", "Key style", listOf("flat" to "Tonal", "raised" to "Elevated", "outline" to "Outlined"), "flat")
         )),
         Section("appearance", "Appearance", "Theme, Material You colors, background", R.drawable.ic_sun, listOf(
             Choice("layoutStyle", "Layout style", listOf("current" to "Standard (uses your own settings)", "raised" to "Compact: rounded keys, operators on top", "flat" to "Pill: pill keys, operators on the left", "pro" to "Round: round keys, symbol hints"), "current"),
@@ -110,7 +108,6 @@ object Defs {
             Choice("theme", "Theme", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"), "system"),
             Toggle("dynamicColor", "Material You dynamic color (Android 12+, follows your wallpaper)", true),
             Choice("accent", "Accent color (when Material You is off)", listOf("teal" to "Teal", "blue" to "Blue", "purple" to "Purple", "orange" to "Orange"), "teal"),
-            Toggle("borders", "Key borders", false),
             Action("bgEdit", "Background image", "Choose a photo, crop, zoom, dim, blur"),
             Toggle("bgOn", "Show background image", false),
             Slide("bgDim", "Image dimming (%)", 0, 90, 35),

@@ -57,7 +57,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import com.mkmehmood.everydaykeys.data.Prefs
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
@@ -106,7 +105,6 @@ private fun keyShapeUser(p: Prefs): Shape = when (p.str("keyShape")) {
     "round" -> CircleShape                // full
     else -> EveryDayKeysShapes.medium      // the Material 3 default
 }
-internal fun keyWeight(p: Prefs): FontWeight = when (p.str("keyWeight")) { "normal" -> FontWeight.Normal; "bold" -> FontWeight.Bold; else -> FontWeight.Medium }
 /** Keyboard size as a fraction, 0.6 to 1.0. */
 internal fun keyScale(p: Prefs): Float = (p.int("keyScale").coerceIn(60, 100)) / 100f
 
@@ -242,7 +240,6 @@ fun Key(
     // elevated key style: Material 3 level-1 elevation
     var m = (if (style == "raised") modifier.shadow(1.dp, shape) else modifier).clip(shape).background(fill)
     if (outline) m = m.border(1.5.dp, if (tone == 2 || active) c.accent else c.sub.copy(alpha = 0.7f), shape)
-    else if (p.bool("borders")) m = m.border(1.dp, c.sub.copy(alpha = 0.5f), shape)
     m = m
         .semantics { contentDescription = desc; role = Role.Button; onClick(label = desc) { tap(); true } }
         .pointerInput(Unit) {
@@ -276,7 +273,7 @@ fun Key(
         }
     Box(m, contentAlignment = Alignment.Center) {
         if (icon != null) Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(22.dp))
-        else if (label != null) Text(label, color = fg, fontSize = p.int("fontSize").sp, fontWeight = keyWeight(p), maxLines = 1,
+        else if (label != null) Text(label, color = fg, style = MaterialTheme.typography.titleLarge, maxLines = 1,
             modifier = if (hint != null) Modifier.padding(top = 8.dp) else Modifier)
         if (hint != null && label != null) Text(hint, color = c.accent, style = MaterialTheme.typography.labelSmall, maxLines = 1, modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
         if (pressed && tone == 0 && label != null && label.length <= 2 && label.isNotBlank() && p.bool("keyPreview")) {
@@ -286,7 +283,7 @@ fun Key(
                 Box(
                     Modifier.size(52.dp, 64.dp).shadow(6.dp, bubble).clip(bubble).background(c.key),
                     contentAlignment = Alignment.Center
-                ) { Text(label, color = c.text, style = MaterialTheme.typography.headlineMedium, fontWeight = keyWeight(p)) }
+                ) { Text(label, color = c.text, style = MaterialTheme.typography.headlineMedium) }
             }
         }
     }
@@ -663,7 +660,7 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
         items.forEachIndexed { i, s ->
             if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.sub.copy(alpha = 0.4f)))
             Text(
-                s, color = c.text, style = MaterialTheme.typography.titleMedium, fontWeight = keyWeight(svc.prefs), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                s, color = c.text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) }.padding(vertical = 8.dp)
             )
         }
