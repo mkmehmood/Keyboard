@@ -60,6 +60,13 @@ internal val PanelField = Dim.Field
 /** Every panel that replaces the keys is this tall, so the keyboard does not jump when switching between them. */
 private val PanelHeight = 270.dp
 
+/** Panels take the height of the key area they replace, so every mode and panel has the same keyboard size. */
+@Composable
+internal fun panelHeight(svc: EveryDayKeysService): Dp {
+    val keysH = with(androidx.compose.ui.platform.LocalDensity.current) { svc.keysHeightPx.toDp() }
+    return if (svc.keysHeightPx > 0) keysH else PanelHeight
+}
+
 /** The thin border colour used on cards and fields. */
 /** The keyboard's colours expressed as the shared design palette, so panels use the same pieces as Settings. */
 internal fun KbColors.palette() = Palette(
@@ -254,7 +261,7 @@ internal fun ClipPanel(svc: EveryDayKeysService, c: KbColors) {
 
 @Composable
 private fun LockedClipPanel(svc: EveryDayKeysService, c: KbColors) {
-    Column(Modifier.fillMaxWidth().height(PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().height(panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         PanelGroup(c, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 PanelTile(c, R.drawable.ic_lock, 48.dp, true)
@@ -277,9 +284,9 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     LaunchedEffect(confirmClear) { if (confirmClear) { delay(3000); confirmClear = false } }
     // the preview grows to the height of the key area it replaces, so the keyboard never gets taller than normal
     val keysH = with(androidx.compose.ui.platform.LocalDensity.current) { svc.keysHeightPx.toDp() }
-    val previewH = if (svc.keysHeightPx > 0) keysH.coerceAtLeast(200.dp) else PanelHeight
+    val previewH = panelHeight(svc)
     Column(
-        Modifier.fillMaxWidth().height(if (preview != null) previewH else if (svc.searching) 150.dp else PanelHeight).padding(2.dp),
+        Modifier.fillMaxWidth().height(if (preview != null) previewH else if (svc.searching) 150.dp else panelHeight(svc)).padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         val pv = preview
@@ -381,7 +388,7 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
     val all by remember { AppDb.get(ctx).snippets().observe() }.collectAsState(initial = emptyList())
     val q = svc.query.trim().lowercase()
     val list = if (q.isEmpty()) all else all.filter { it.title.lowercase().contains(q) || it.body.lowercase().contains(q) || it.shortcut.lowercase().contains(q) }
-    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelSearch(svc, c, "Search snippets", Modifier.weight(1f), flat = true)
             if (svc.searching) IconTap(R.drawable.ic_close, "Stop searching", c, c.sub) { svc.searching = false; svc.query = "" }
@@ -418,7 +425,7 @@ internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
     val q = svc.query.trim().lowercase()
     val items = if (q.isEmpty()) (recents + Emojis.all.map { it.first }).distinct()
     else Emojis.all.filter { it.second.contains(q) }.map { it.first }
-    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else 270.dp).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().height(if (svc.searching) 150.dp else panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (svc.searching) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconTap(R.drawable.ic_back, "Stop searching", c) { svc.searching = false; svc.query = "" }
@@ -490,7 +497,7 @@ private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbCol
 internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val gap = Arrangement.spacedBy(5.dp)
     val key = Modifier.fillMaxHeight()
-    Column(Modifier.fillMaxWidth().height(PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().height(panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PanelGroup(c, Modifier.weight(1f).fillMaxHeight()) {
                 Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -570,7 +577,7 @@ private fun QuickLabel(c: KbColors, text: String) =
 @Composable
 internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
     val side = Arrangement.spacedBy(8.dp)
-    Column(Modifier.fillMaxWidth().height(PanelHeight).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().height(panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         PanelHeader(c, "Quick settings", "Back to keyboard", { svc.closePanel() }) {
             IconTap(R.drawable.ic_settings, "All settings", c, c.sub) { svc.openSettings() }
         }

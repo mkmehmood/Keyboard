@@ -30,6 +30,9 @@ object Layouts {
 
     val symPages = listOf(sym1, sym2, sym3, sym4)
 
+    /** Same pages for when the digit row is shown above them; page 1 swaps its own digits for a row of extra symbols. */
+    val symPagesWithNumberRow = listOf(listOf(sym1[1], sym1[2], r("% = \\ | < > [ ]")), sym2, sym3, sym4)
+
     /** label shown on key, text committed */
     val ops = listOf("+" to "+", "−" to "-", "×" to "×", "÷" to "÷", "=" to "=", "%" to "%", "/" to "/")
 }

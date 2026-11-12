@@ -175,6 +175,8 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
                 else if (svc.panel == Panel.NONE && svc.mode != Mode.NUMPAD) Strip(svc, c)
                 // the number pad has no suggestions, only the tool icons
                 else if (p.bool("showToolbar") || svc.panel != Panel.NONE) Toolbar(svc, c)
+                // keep the bar's height so the number pad is exactly as tall as the letters
+                else Spacer(Modifier.fillMaxWidth().height(StripH))
             }
             when (svc.panel) {
                 Panel.NONE -> Box(Modifier.onSizeChanged { svc.keysHeightPx = it.height }) { Keys(svc, c, h) }
@@ -312,6 +314,24 @@ private val Hints = mapOf("a" to "@", "s" to "#", "d" to "$", "f" to "_", "g" to
 private val MaxKey = 64.dp
 private val KeyGap = 5.dp
 
+/**
+ * One key grid shared by letters, symbols and every number pad, so the keyboard keeps the same width, height and key size
+ * whichever mode is showing. [rows] is the row count of the letter keyboard (5 with the number row, otherwise 4); the other
+ * modes stretch or share that same frame instead of using sizes of their own.
+ */
+private class Grid(val unit: Dp, val uh: Dp, val rows: Int) {
+    val width: Dp get() = unit * 10 + KeyGap * 9
+    val height: Dp get() = uh * rows + KeyGap * (rows - 1)
+    fun w(span: Float): Dp = unit * span + KeyGap * (span - 1f)
+    /** Height of one row when [n] equal rows fill the whole frame. */
+    fun rowH(n: Int): Dp = (height - KeyGap * (n - 1)) / n
+}
+
+private fun kbGrid(maxWidth: Dp, p: Prefs): Grid {
+    val unit = minOf((maxWidth - KeyGap * 9) / 10, MaxKey) * keyScale(p)
+    return Grid(unit, unit * keyHeight(p), if (p.bool("numberRow")) 5 else 4)
+}
+
 @Composable
 private fun LettersView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val rows = Layouts.letters[svc.lang] ?: Layouts.letters.getValue("en")
@@ -320,9 +340,9 @@ private fun LettersView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val gap = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // ten key columns; every key spans a multiple of `unit` wide and is `uh` tall (`unit` times the height setting)
-        val unit = minOf((maxWidth - KeyGap * 9) / 10, MaxKey) * keyScale(svc.prefs)
-        val uh = unit * keyHeight(svc.prefs)
-        fun w(span: Float) = unit * span + KeyGap * (span - 1f)
+        val grid = kbGrid(maxWidth, svc.prefs)
+        val uh = grid.uh
+        fun w(span: Float) = grid.w(span)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KeyGap), horizontalAlignment = Alignment.CenterHorizontally) {
             if (svc.prefs.bool("numberRow")) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
                 "1234567890".forEach { d ->
@@ -372,7 +392,10 @@ private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val kind = p.str("numpadLayout").let {
         if (it == "auto" || it.isEmpty()) when (layoutStyle(p)) { "raised" -> "top"; "flat" -> "left"; "pro" -> "circles"; else -> "classic" } else it
     }
-    if (kind == "top" || kind == "left" || kind == "circles") NumpadVariant(svc, c, kind) else NumpadClassic(svc, c, h)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val grid = kbGrid(maxWidth, p)
+        if (kind == "top" || kind == "left" || kind == "circles") NumpadVariant(svc, c, kind, grid) else NumpadClassic(svc, c, grid)
+    }
 }
 
 @Composable
@@ -387,19 +410,19 @@ private fun NI(svc: EveryDayKeysService, c: KbColors, mod: Modifier, icon: Int, 
 
 /** The three number pad designs from the preview: operators on top, operators on the left, and round keys. */
 @Composable
-private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String) {
-    val sc = keyScale(svc.prefs)
+private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, grid: Grid) {
     val g = KeyGap
-    val kh = 54.dp * sc * keyHeight(svc.prefs)
+    // "top" has an extra operator row at 0.7 of a key; the others have four equal rows. Both fill the shared frame exactly.
+    val kh = if (kind == "top") (grid.height - g * 4) / 4.7f else grid.rowH(4)
     val gap = Arrangement.spacedBy(g)
     val pill = RoundedCornerShape(50)
     val dig: Shape? = if (kind == "circles") pill else null
     val ops = listOf("÷" to "/", "×" to "*", "−" to "-", "+" to "+")
     val toLetters = { svc.mode = Mode.LETTERS }
     val toSym = { svc.mode = Mode.SYM1 }
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    Box(Modifier.fillMaxWidth()) {
         when (kind) {
-            "top" -> Column(Modifier.fillMaxWidth(sc).align(Alignment.Center), verticalArrangement = gap) {
+            "top" -> Column(Modifier.width(grid.width).align(Alignment.Center), verticalArrangement = gap) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
                     listOf("×" to "*", "÷" to "/", "=" to "=", "%" to "%", "(" to "(", ")" to ")", "," to ",").forEach { (l, v) ->
                         NK(svc, c, Modifier.weight(1f).height(kh * 0.7f), l, 1) { if (v == "=") svc.onEquals() else svc.commitText(v) }
@@ -420,7 +443,7 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String) {
                     NI(svc, c, Modifier.weight(1f).height(kh), R.drawable.ic_enter, "Enter", 2) { svc.onEnter() }
                 }
             }
-            "left" -> Row(Modifier.fillMaxWidth(sc).align(Alignment.Center), horizontalArrangement = gap) {
+            "left" -> Row(Modifier.width(grid.width).align(Alignment.Center), horizontalArrangement = gap) {
                 Column(Modifier.weight(0.9f), verticalArrangement = gap) {
                     ops.forEach { (l, v) -> NK(svc, c, Modifier.fillMaxWidth().height(kh), l, 1) { svc.commitText(v) } }
                 }
@@ -441,7 +464,7 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String) {
                     NI(svc, c, Modifier.fillMaxWidth().height(kh * 2 + g), R.drawable.ic_enter, "Enter", 2, pill) { svc.onEnter() }
                 }
             }
-            else -> Row(Modifier.fillMaxWidth(sc).align(Alignment.Center), horizontalArrangement = gap) {
+            else -> Row(Modifier.width(grid.width).align(Alignment.Center), horizontalArrangement = gap) {
                 Column(Modifier.weight(3f), verticalArrangement = gap) {
                     listOf("123", "456", "789").forEach { r ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
@@ -468,14 +491,13 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String) {
 }
 
 @Composable
-private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, h: Dp) {
-    val sc = keyScale(svc.prefs)
+private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, grid: Grid) {
     val g = KeyGap
-    val kh = 54.dp * sc * keyHeight(svc.prefs)
+    val kh = grid.rowH(4)
     val gap = Arrangement.spacedBy(g)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    Box(Modifier.fillMaxWidth()) {
         // three columns: operators and ABC on the left, a large 3x3 digit block with a bottom row in the middle, %, space, backspace and enter on the right
-        Row(Modifier.fillMaxWidth(sc).align(Alignment.Center), horizontalArrangement = gap) {
+        Row(Modifier.width(grid.width).align(Alignment.Center), horizontalArrangement = gap) {
             Column(Modifier.weight(0.62f), verticalArrangement = gap) {
                 val opH = (kh * 3 + g * 2 - g * 3) / 4
                 listOf("+", "-", "*", "/").forEach { o ->
@@ -516,13 +538,18 @@ private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
     val symModes = listOf(Mode.SYM1, Mode.SYM2, Mode.SYM3, Mode.SYM4)
     val page = symModes.indexOf(svc.mode).coerceAtLeast(0)
-    val rows = Layouts.symPages[page]
+    // with the number row on, symbols get the same digit row as the letters, so they are five rows tall like the letters
+    val numRow = svc.prefs.bool("numberRow")
+    val rows = if (numRow) Layouts.symPagesWithNumberRow[page] else Layouts.symPages[page]
     val gap = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val unit = minOf((maxWidth - KeyGap * 9) / 10, MaxKey) * keyScale(svc.prefs)
-        val uh = unit * keyHeight(svc.prefs)
-        fun w(span: Float) = unit * span + KeyGap * (span - 1f)
+        val grid = kbGrid(maxWidth, svc.prefs)
+        val uh = grid.uh
+        fun w(span: Float) = grid.w(span)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KeyGap), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (numRow) Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
+                "1234567890".forEach { d -> val k = d.toString(); Key(svc, c, Modifier.size(w(1f), uh), k, label = k) { svc.typeSymbol(k) } }
+            }
             rows.forEachIndexed { i, row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
                     row.forEach { k -> Key(svc, c, Modifier.size(w(1f), uh), k, label = k) { svc.typeSymbol(k) } }
