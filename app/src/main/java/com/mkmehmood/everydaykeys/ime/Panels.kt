@@ -115,7 +115,7 @@ internal fun PanelHeader(c: KbColors, title: String, backDesc: String, onBack: (
 internal fun PanelGroup(c: KbColors, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) = DsGroup(c.palette(), modifier, content)
 
 @Composable
-internal fun PanelDivider(c: KbColors) = DsDivider(c.palette())
+internal fun PanelDivider(c: KbColors) = Spacer(Modifier.height(6.dp))
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -123,17 +123,19 @@ internal fun PanelRow(
     c: KbColors, icon: Int?, title: String, sub: String?, selected: Boolean = false,
     onLong: (() -> Unit)? = null, onClick: () -> Unit, trailing: @Composable RowScope.() -> Unit = {}
 ) {
+    // each item is its own tonal card, the same surface and shape family as the keys, so the list reads as part of the keyboard
     Row(
         Modifier.fillMaxWidth().heightIn(min = if (icon == null) 52.dp else 56.dp)
-            .background(if (selected && icon == null) c.accent.copy(alpha = 0.16f) else Color.Transparent)
+            .clip(PanelField)
+            .background(if (selected) c.accentContainer else if (c.key == c.panel) c.bg else c.key)
             .combinedClickable(onLongClick = onLong, onClick = onClick)
-            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) PanelTile(c, icon, filled = selected)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(title, color = c.text, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (sub != null) Text(sub, color = c.sub, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, color = if (selected) c.onAccentContainer else c.text, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub != null) Text(sub, color = if (selected) c.onAccentContainer else c.sub, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         trailing()
     }
@@ -332,7 +334,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
         }
         PanelGroup(c, Modifier.weight(1f)) {
             if (list.isEmpty()) PanelEmpty(c, R.drawable.ic_clipboard, when { svc.query.isNotEmpty() -> "No matches"; else -> "Nothing copied yet. Copy some text and it shows up here. No size limit, and it stays on this phone." })
-            else LazyColumn(Modifier.fillMaxSize()) {
+            else LazyColumn(Modifier.fillMaxSize().padding(6.dp)) {
                 itemsIndexed(list, key = { _, clip -> clip.id }) { i, clip ->
                     val isSel = clip.id in selected
                     val first = clip.preview.lineSequence().firstOrNull { it.isNotBlank() } ?: clip.preview
@@ -374,7 +376,7 @@ private fun ColumnScope.ClipPreview(svc: EveryDayKeysService, c: KbColors, clip:
     val text = body
     val scope = rememberCoroutineScope()
     PanelGroup(c, Modifier.weight(1f)) {
-        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        Box(Modifier.fillMaxSize().padding(6.dp).clip(PanelField).background(if (c.key == c.panel) c.bg else c.key).verticalScroll(rememberScrollState()).padding(12.dp)) {
             Text(if (text == null) "Loading..." else text.take(limit), color = c.text, style = MaterialTheme.typography.bodyLarge)
         }
     }
@@ -416,7 +418,7 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
                     PanelButton(svc, c, "Add a snippet", R.drawable.ic_add, true, Modifier.fillMaxWidth(0.7f)) { svc.openSettings() }
                 }
                 list.isEmpty() -> PanelEmpty(c, R.drawable.ic_search, "No snippets match")
-                else -> LazyColumn(Modifier.fillMaxSize()) {
+                else -> LazyColumn(Modifier.fillMaxSize().padding(6.dp)) {
                     itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
                         if (i > 0) PanelDivider(c)
                         PanelRow(c, null, s.title, s.body.replace(Regex("\\s+"), " ").take(60), onClick = { svc.feedback(); svc.commitText(s.body); svc.closePanel() }) {
