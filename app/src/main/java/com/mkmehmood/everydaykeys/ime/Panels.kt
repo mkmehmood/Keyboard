@@ -18,6 +18,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -34,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -93,10 +94,9 @@ internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean
 /** A toolbar icon, 48dp tall tap target. */
 @Composable
 internal fun ToolTile(icon: Int, desc: String, c: KbColors, filled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier.height(48.dp).semantics { contentDescription = desc }.clickable(onClickLabel = desc, role = Role.Button) { onClick() },
-        contentAlignment = Alignment.Center
-    ) { PanelTile(c, icon, 34.dp, filled) }
+    Surface(onClick = onClick, modifier = modifier.height(48.dp).semantics { contentDescription = desc }, color = Color.Transparent) {
+        Box(contentAlignment = Alignment.Center) { PanelTile(c, icon, 34.dp, filled) }
+    }
 }
 
 @Composable
@@ -207,11 +207,15 @@ internal fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayK
             modifier = Modifier.weight(1f).then(if (ok) Modifier.clickable { svc.feedback(); svc.applyTranslation() } else Modifier)
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         )
-        if (tr.target.isNotBlank()) Text(
-            Translator.nameOf(tr.target), color = c.onAccentContainer, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1,
-            modifier = Modifier.padding(horizontal = 2.dp).clip(CircleShape).background(c.accentContainer)
-                .clickable { svc.feedback(); svc.nextTranslateTarget() }.padding(horizontal = 10.dp, vertical = 6.dp)
-        )
+        if (tr.target.isNotBlank()) Surface(
+            onClick = { svc.feedback(); svc.nextTranslateTarget() }, shape = CircleShape, color = c.accentContainer, contentColor = c.onAccentContainer,
+            modifier = Modifier.padding(horizontal = 2.dp)
+        ) {
+            Text(
+                Translator.nameOf(tr.target), style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
         IconTap(R.drawable.ic_close, "Dismiss translation", c) { svc.dismissTranslation() }
     }
 }
@@ -220,19 +224,19 @@ internal fun TranslationBar(svc: EveryDayKeysService, c: KbColors, tr: EveryDayK
 @Composable
 internal fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip, wide: Boolean) {
     val text = item.preview.replace(Regex("\\s+"), " ").trim()
-    Row(
-        Modifier.weight(if (wide) 1f else 1.15f).padding(horizontal = 3.dp).height(38.dp)
-            .clip(CircleShape).background(c.panel)
-            .clickable(onClickLabel = "Paste last copied") { svc.feedback(); svc.pasteClips(listOf(item)) }
-            .padding(start = 6.dp, end = if (wide) 2.dp else 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        onClick = { svc.feedback(); svc.pasteClips(listOf(item)) },
+        modifier = Modifier.weight(if (wide) 1f else 1.15f).padding(horizontal = 3.dp).height(38.dp).semantics { contentDescription = "Paste last copied" },
+        shape = CircleShape, color = c.panel
     ) {
+      Row(Modifier.padding(start = 6.dp, end = if (wide) 2.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
         PanelTile(c, R.drawable.ic_clipboard, 26.dp)
         Text(text, color = c.text, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
         if (wide) {
             if (item.length > 200) Text("%,d chars".format(item.length), color = c.sub, style = MaterialTheme.typography.labelSmall)
             IconTap(R.drawable.ic_close, "Dismiss", c, c.sub, Modifier.size(36.dp)) { svc.pendingClip = null }
         }
+      }
     }
 }
 
@@ -315,12 +319,12 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
         } else Row(verticalAlignment = Alignment.CenterVertically) {
             PanelSearch(svc, c, "Search clipboard", Modifier.weight(1f), flat = true) {
                 if (!svc.searching) {
-                    if (confirmClear) Text(
-                        "Clear all?", color = c.onAccent, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                        modifier = Modifier.padding(end = 6.dp).clip(CircleShape).background(c.accent)
-                            .clickable(onClickLabel = "Confirm: clear all unpinned items") { scope.launch { svc.clips.clearUnpinned() }; confirmClear = false }
-                            .padding(horizontal = 12.dp, vertical = 7.dp)
-                    )
+                    if (confirmClear) Button(
+                        onClick = { scope.launch { svc.clips.clearUnpinned() }; confirmClear = false },
+                        modifier = Modifier.padding(end = 6.dp).height(32.dp).semantics { contentDescription = "Confirm: clear all unpinned items" },
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent)
+                    ) { Text("Clear all?", maxLines = 1) }
                     else IconTap(R.drawable.ic_trash, "Clear all unpinned items", c, c.sub, Modifier.size(40.dp)) { confirmClear = true }
                 }
             }
@@ -416,10 +420,11 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
                     itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
                         if (i > 0) PanelDivider(c)
                         PanelRow(c, null, s.title, s.body.replace(Regex("\\s+"), " ").take(60), onClick = { svc.feedback(); svc.commitText(s.body); svc.closePanel() }) {
-                            if (s.shortcut.isNotBlank()) Text(
-                                s.shortcut, color = c.onAccentContainer, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                                modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.accentContainer).padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            if (s.shortcut.isNotBlank()) Surface(
+                                shape = Dim.Badge, color = c.accentContainer, contentColor = c.onAccentContainer, modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(s.shortcut, style = MaterialTheme.typography.labelLarge, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                            }
                         }
                     }
                 }
@@ -543,12 +548,9 @@ internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 // ---------------------------------------------------------------- quick settings
 
 @Composable
-private fun QuickBox(c: KbColors, icon: Int, title: String, sub: String, active: Boolean, modifier: Modifier) {
+private fun QuickBoxContent(c: KbColors, icon: Int, title: String, sub: String, active: Boolean) {
     val p = c.palette()
-    Row(
-        modifier.height(64.dp).clip(Dim.Card).background(if (active) p.accentContainer else p.surface).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(icon), null, tint = if (active) p.onAccentContainer else p.sub, modifier = Modifier.size(22.dp))
         Column(Modifier.padding(start = 10.dp)) {
             Text(title, color = p.text, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -557,12 +559,26 @@ private fun QuickBox(c: KbColors, icon: Int, title: String, sub: String, active:
     }
 }
 
+/** A Material 3 tile: a toggleable surface when [onToggle] is given, otherwise a plain button surface that calls [onClick]. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickBox(
+    c: KbColors, icon: Int, title: String, sub: String, active: Boolean, modifier: Modifier,
+    clickLabel: String = title, onToggle: ((Boolean) -> Unit)? = null, onClick: () -> Unit = {}
+) {
+    val p = c.palette()
+    val color = if (active) p.accentContainer else p.surface
+    val m = modifier.height(64.dp)
+    if (onToggle != null) Surface(checked = active, onCheckedChange = onToggle, modifier = m, shape = Dim.Card, color = color) { QuickBoxContent(c, icon, title, sub, active) }
+    else Surface(onClick = onClick, modifier = m.semantics { contentDescription = clickLabel }, shape = Dim.Card, color = color) { QuickBoxContent(c, icon, title, sub, active) }
+}
+
 @Composable
 private fun QuickTile(svc: EveryDayKeysService, c: KbColors, icon: Int, title: String, key: String, modifier: Modifier, on: String = "true", off: String = "false", onLabel: String = "On") {
     val enabled = svc.prefs.str(key) != off
     QuickBox(
-        c, icon, title, if (enabled) onLabel else "Off", enabled,
-        modifier.toggleable(value = enabled, role = Role.Switch) { v -> svc.feedback(); svc.setPref(key, if (v) on else off) }
+        c, icon, title, if (enabled) onLabel else "Off", enabled, modifier,
+        onToggle = { v -> svc.feedback(); svc.setPref(key, if (v) on else off) }
     )
 }
 
@@ -571,11 +587,8 @@ private fun QuickTile(svc: EveryDayKeysService, c: KbColors, icon: Int, title: S
 private fun QuickCycle(svc: EveryDayKeysService, c: KbColors, icon: Int, title: String, key: String, options: List<Pair<String, String>>, modifier: Modifier) {
     val i = options.indexOfFirst { it.first == svc.prefs.str(key) }.coerceAtLeast(0)
     QuickBox(
-        c, icon, title, options[i].second, i != 0,
-        modifier.clickable(onClickLabel = "Change $title, now ${options[i].second}", role = Role.Button) {
-            svc.feedback(); svc.setPref(key, options[(i + 1) % options.size].first)
-        }
-    )
+        c, icon, title, options[i].second, i != 0, modifier, clickLabel = "Change $title, now ${options[i].second}"
+    ) { svc.feedback(); svc.setPref(key, options[(i + 1) % options.size].first) }
 }
 
 @Composable
@@ -612,7 +625,7 @@ internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
                 QuickTile(svc, c, R.drawable.ic_numpad, "Number row", "numberRow", Modifier.weight(1f))
-                QuickBox(c, R.drawable.ic_tune, "Resize keyboard", "Drag edges", false, Modifier.weight(1f).clickable(onClickLabel = "Resize the keyboard", role = Role.Button) { svc.feedback(); svc.closePanel(); svc.setPref("resizeMode", "true") })
+                QuickBox(c, R.drawable.ic_tune, "Resize keyboard", "Drag edges", false, Modifier.weight(1f), clickLabel = "Resize the keyboard") { svc.feedback(); svc.closePanel(); svc.setPref("resizeMode", "true") }
             }
         }
     }
