@@ -417,8 +417,8 @@ private fun NK(svc: EveryDayKeysService, c: KbColors, mod: Modifier, label: Stri
 
 @Composable
 private fun NI(svc: EveryDayKeysService, c: KbColors, mod: Modifier, icon: Int, desc: String, tone: Int = 1, shape: Shape? = null,
-               repeat: Boolean = false, act: () -> Unit) =
-    Key(svc, c, mod, desc, icon = icon, tone = tone, shapeOverride = shape, repeat = repeat, onTap = act)
+               repeat: Boolean = false, onLong: (() -> Unit)? = null, act: () -> Unit) =
+    Key(svc, c, mod, desc, icon = icon, tone = tone, shapeOverride = shape, repeat = repeat, onLong = onLong, onTap = act)
 
 /** The three number pad designs from the preview: operators on top, operators on the left, and round keys. */
 @Composable
@@ -449,7 +449,7 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
-                    NK(svc, c, Modifier.weight(1f).height(kh), "ABC", 1, desc = "Back to letters. Long press for symbols.", onLong = toSym) { toLetters() }
+                    NI(svc, c, Modifier.weight(1f).height(kh), R.drawable.ic_keyboard, "Back to letters. Long press for symbols.", 1, onLong = toSym) { toLetters() }
                     NK(svc, c, Modifier.weight(1f).height(kh), "0") { svc.onChar("0") }
                     NK(svc, c, Modifier.weight(1f).height(kh), ".", 1, desc = "Decimal point") { svc.onChar(".") }
                     NI(svc, c, Modifier.weight(1f).height(kh), R.drawable.ic_enter, "Enter", 2) { svc.onEnter() }
@@ -472,7 +472,7 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
                 }
                 Column(Modifier.weight(1.1f), verticalArrangement = gap) {
                     NI(svc, c, Modifier.fillMaxWidth().height(kh), R.drawable.ic_backspace, "Backspace", repeat = true) { svc.onBackspace() }
-                    NK(svc, c, Modifier.fillMaxWidth().height(kh), "ABC", 1, desc = "Back to letters. Long press for symbols.", onLong = toSym) { toLetters() }
+                    NI(svc, c, Modifier.fillMaxWidth().height(kh), R.drawable.ic_keyboard, "Back to letters. Long press for symbols.", 1, onLong = toSym) { toLetters() }
                     NI(svc, c, Modifier.fillMaxWidth().height(kh * 2 + g), R.drawable.ic_enter, "Enter", 2, pill) { svc.onEnter() }
                 }
             }
@@ -494,7 +494,7 @@ private fun NumpadVariant(svc: EveryDayKeysService, c: KbColors, kind: String, g
                 }
                 Column(Modifier.weight(1.1f), verticalArrangement = gap) {
                     NI(svc, c, Modifier.fillMaxWidth().height(kh), R.drawable.ic_backspace, "Backspace", shape = dig, repeat = true) { svc.onBackspace() }
-                    NK(svc, c, Modifier.fillMaxWidth().height(kh), "ABC", 1, pill, "Back to letters. Long press for symbols.", toSym) { toLetters() }
+                    NI(svc, c, Modifier.fillMaxWidth().height(kh), R.drawable.ic_keyboard, "Back to letters. Long press for symbols.", 1, pill, onLong = toSym) { toLetters() }
                     NI(svc, c, Modifier.fillMaxWidth().height(kh * 2 + g), R.drawable.ic_enter, "Enter", 2, pill) { svc.onEnter() }
                 }
             }
@@ -515,7 +515,7 @@ private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, grid: Grid) {
                 listOf("+", "-", "*", "/").forEach { o ->
                     Key(svc, c, Modifier.fillMaxWidth().height(opH), o, label = o, tone = 1) { svc.commitText(o) }
                 }
-                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Back to letters. Long press for symbols.", label = "ABC", tone = 1,
+                Key(svc, c, Modifier.fillMaxWidth().height(kh), "Back to letters. Long press for symbols.", icon = R.drawable.ic_keyboard, tone = 1,
                     onLong = { svc.mode = Mode.SYM1 }) { svc.mode = Mode.LETTERS }
             }
             Column(Modifier.weight(3f), verticalArrangement = gap) {
