@@ -87,7 +87,7 @@ object Defs {
             Toggle("autoCap", "Auto-capitalization", true),
             Toggle("doubleSpace", "Double-space for a period", true),
             Action("dictionary", "Personal dictionary", "Add or remove your own words"),
-            Action("aiNote", "Gemini AI sentence completion & prompt", "Uses your GEMINI_API_KEY configured in AI Studio Secrets. Auto-completion sends only the current sentence context when enabled; Text-to-Prompt runs only when tapped."),
+            Action("aiNote", "Gemini AI sentence completion & prompt", "Uses GEMINI_API_KEY injected at build time via AI Studio Secrets or GitHub Actions Secrets. Auto-completion sends only the current sentence context when enabled; Text-to-Prompt runs only when tapped."),
             Action("localNote", "Local typing by default", "Word suggestions and autocorrect run on-device. Online word suggestions are optional and off by default.")
         )),
         Section("translate", "Translation", "Translate selected or typed text", R.drawable.ic_translate, listOf(

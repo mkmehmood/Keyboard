@@ -36,7 +36,7 @@ Colors are always Material 3. The optional layout styles under Appearance (Compa
 
 ## Build
 
-Open in Android Studio (JDK 17) or run `./gradlew assembleRelease`. Release signing reads `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. In CI, add repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` for a stable signing key; without them a throwaway key is generated per build (APKs install, but you cannot update over a build signed with a different key).
+Open in Android Studio (JDK 17) or run `./gradlew assembleRelease`. Release signing reads `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. In CI, add repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` for a stable signing key (without them a throwaway key is generated per build) and `GEMINI_API_KEY` for AI sentence completion, Text-to-Prompt, and image creation/editing.
 
 ## Licenses
 

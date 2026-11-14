@@ -54,7 +54,7 @@ object GeminiClient {
     private fun requireKey(): String {
         val k = BuildConfig.GEMINI_API_KEY.trim()
         if (k.isEmpty() || k == "your_gemini_api_key_here") {
-            throw Failure("Add your GEMINI_API_KEY in the AI Studio Secrets panel.")
+            throw Failure("GEMINI_API_KEY is not set. Add it in AI Studio Secrets or GitHub Actions Secrets.")
         }
         return k
     }
