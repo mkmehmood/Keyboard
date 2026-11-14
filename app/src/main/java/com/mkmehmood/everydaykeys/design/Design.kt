@@ -1,18 +1,12 @@
 package com.mkmehmood.everydaykeys.design
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchColors
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
@@ -29,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.mkmehmood.everydaykeys.R
 
 /*
- * The one design system for Everyday Keys, built to Material 3 specifications.
+ * The shared Material 3 design system for Everyday Keys.
  *
  * The Settings screens and everything the keyboard shows above the keys (clipboard, snippets, emoji, converter,
  * cursor keys, quick settings, paste progress, action notices) use the pieces in this file, so a card, tonal icon,
@@ -41,17 +35,17 @@ import com.mkmehmood.everydaykeys.R
 /** Material 3 state layer opacity for the pressed state (spec value). */
 object StateLayer { const val Pressed = 0.10f }
 
-/** Material 3 shape scale and sizes. */
+/** Material 3 Expressive shape scale and sizes. */
 object Dim {
-    val Card = RoundedCornerShape(16.dp)       // shape.large
-    val Field = RoundedCornerShape(12.dp)      // shape.medium
-    val Button = CircleShape                   // M3 buttons are fully rounded
-    val Chip = RoundedCornerShape(8.dp)        // shape.small
+    val Card = RoundedCornerShape(20.dp)       // shape.large
+    val Field = RoundedCornerShape(14.dp)      // shape.medium
+    val Button = CircleShape                   // M3 buttons are pill-shaped
+    val Chip = RoundedCornerShape(10.dp)       // shape.small
     val TileShape = CircleShape                // leading icon container
-    val Badge = RoundedCornerShape(8.dp)
-    val TileSize = 40.dp
-    val RowMin = 56.dp
-    val ButtonHeight = 40.dp
+    val Badge = RoundedCornerShape(10.dp)
+    val TileSize = 42.dp
+    val RowMin = 60.dp
+    val ButtonHeight = 44.dp
 }
 
 /** Material 3 colour roles the shared components need. */
@@ -84,45 +78,79 @@ fun settingsPalette(): Palette {
 /** Circular tonal container with an icon: the Material 3 leading icon. Used at the start of rows and for toolbar icons. */
 @Composable
 fun DsTile(p: Palette, icon: Int, size: Dp = Dim.TileSize, filled: Boolean = false) {
-    Surface(Modifier.size(size), shape = Dim.TileShape, color = if (filled) p.accent else p.tile) {
+    Surface(
+        Modifier.size(size),
+        shape = Dim.TileShape,
+        color = if (filled) p.accent else p.tile,
+        tonalElevation = if (filled) 2.dp else 0.dp
+    ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(painterResource(icon), null, tint = if (filled) p.onAccent else p.onTile, modifier = Modifier.size(size * 0.6f))
+            Icon(painterResource(icon), null, tint = if (filled) p.onAccent else p.onTile, modifier = Modifier.size(size * 0.56f))
         }
     }
 }
 
-/** Filled Material 3 card (surface container, large shape, no border). Put rows inside it and separate them with [DsDivider]. */
+/** Filled Material 3 card (surface container, large expressive shape, subtle tonal border). */
 @Composable
 fun DsGroup(p: Palette, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier.fillMaxWidth(), shape = Dim.Card,
-        colors = CardDefaults.cardColors(containerColor = p.surface, contentColor = p.text), content = content
+        modifier.fillMaxWidth().animateContentSize(),
+        shape = Dim.Card,
+        colors = CardDefaults.cardColors(containerColor = p.surface, contentColor = p.text),
+        border = BorderStroke(0.5.dp, p.hairline.copy(alpha = 0.45f)),
+        content = content
     )
 }
 
 /** Inset divider, as in Material 3 lists. */
 @Composable
-fun DsDivider(p: Palette) = HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = p.hairline)
+fun DsDivider(p: Palette) = HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = p.hairline.copy(alpha = 0.65f))
 
 /** Material 3 filled or outlined button with an optional leading icon. */
 @Composable
 fun DsButton(p: Palette, text: String, icon: Int?, primary: Boolean, modifier: Modifier = Modifier, height: Dp = Dim.ButtonHeight, onClick: () -> Unit) {
     val label: @Composable RowScope.() -> Unit = {
-        if (icon != null) { Icon(painterResource(icon), null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)) }
-        Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (icon != null) {
+            Icon(painterResource(icon), null, Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        }
+        Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
     }
-    val m = modifier.height(height)
+    val m = modifier.heightIn(min = height)
     val pad = if (icon != null) ButtonDefaults.ButtonWithIconContentPadding else ButtonDefaults.ContentPadding
-    if (primary) Button(onClick, m, contentPadding = pad, colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.onAccent), content = label)
-    else OutlinedButton(onClick, m, contentPadding = pad, border = BorderStroke(1.dp, p.off), colors = ButtonDefaults.outlinedButtonColors(contentColor = p.accent), content = label)
+    if (primary) {
+        Button(
+            onClick, m,
+            shape = Dim.Button,
+            contentPadding = pad,
+            colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.onAccent),
+            content = label
+        )
+    } else {
+        OutlinedButton(
+            onClick, m,
+            shape = Dim.Button,
+            contentPadding = pad,
+            border = BorderStroke(1.dp, p.off.copy(alpha = 0.7f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = p.accent),
+            content = label
+        )
+    }
 }
 
-/** Supporting note with an icon, shown under a card. */
+/** Supporting tonal note banner with an icon, shown under a card. */
 @Composable
 fun DsNote(p: Palette, icon: Int, text: String, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painterResource(icon), null, tint = p.sub, modifier = Modifier.size(16.dp))
-        Text(text, color = p.sub, style = MaterialTheme.typography.bodySmall, maxLines = 2, modifier = Modifier.padding(start = 8.dp))
+    Surface(
+        modifier.fillMaxWidth(),
+        shape = Dim.Field,
+        color = p.tile.copy(alpha = 0.35f),
+        contentColor = p.sub
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(icon), null, tint = p.onTile, modifier = Modifier.size(18.dp))
+            Text(text, color = p.sub, style = MaterialTheme.typography.bodySmall, maxLines = 3, modifier = Modifier.padding(start = 10.dp))
+        }
     }
 }
 
@@ -147,7 +175,7 @@ fun DsSwitch(p: Palette, checked: Boolean, onChange: ((Boolean) -> Unit)? = null
 fun DsToggleRow(p: Palette, icon: Int?, title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = Dim.RowMin).toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) { DsTile(p, icon); Spacer(Modifier.width(16.dp)) }
@@ -162,15 +190,24 @@ fun DsToggleRow(p: Palette, icon: Int?, title: String, sub: String?, checked: Bo
 /** One-line confirmation bar (Copied, Undo...) with an optional follow-up text button, like a Material 3 snackbar. Read out by TalkBack. */
 @Composable
 fun DsNotice(p: Palette, icon: Int, text: String, action: String? = null, onAction: (() -> Unit)? = null, modifier: Modifier = Modifier) {
-    Surface(modifier.fillMaxWidth().fillMaxHeight(), shape = CircleShape, color = p.accentContainer, contentColor = p.onAccentContainer) {
-        Row(Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(
+        modifier.fillMaxWidth().fillMaxHeight(),
+        shape = CircleShape,
+        color = p.accentContainer,
+        contentColor = p.onAccentContainer,
+        tonalElevation = 2.dp
+    ) {
+        Row(Modifier.padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(painterResource(icon), null, tint = p.onAccentContainer, modifier = Modifier.size(20.dp))
             Text(
-                text, color = p.onAccentContainer, style = MaterialTheme.typography.labelLarge, maxLines = 1,
-                modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }
+                text, color = p.onAccentContainer, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 10.dp).semantics { liveRegion = LiveRegionMode.Polite }
             )
             if (action != null && onAction != null) {
-                TextButton(onClick = onAction, colors = ButtonDefaults.textButtonColors(contentColor = p.onAccentContainer)) { Text(action) }
+                TextButton(
+                    onClick = onAction,
+                    colors = ButtonDefaults.textButtonColors(contentColor = p.onAccentContainer)
+                ) { Text(action, style = MaterialTheme.typography.labelLarge) }
             } else Spacer(Modifier.width(16.dp))
         }
     }

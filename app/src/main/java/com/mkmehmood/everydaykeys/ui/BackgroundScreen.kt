@@ -6,14 +6,16 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint
 import android.graphics.RectF
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,20 +28,21 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.navigation.NavController
+import com.mkmehmood.everydaykeys.R
 import com.mkmehmood.everydaykeys.data.KbBackground
 import com.mkmehmood.everydaykeys.data.SettingsRepo
+import com.mkmehmood.everydaykeys.design.MonoFontFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -52,8 +55,9 @@ import kotlin.math.min
 fun BackgroundScreen(nav: NavController) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val scrimC = MaterialTheme.colorScheme.scrim
-    val keyC = MaterialTheme.colorScheme.let { if (isSystemInDarkTheme()) it.surfaceContainerHighest else it.surfaceContainerLowest }
+    val cs = MaterialTheme.colorScheme
+    val scrimC = cs.scrim
+    val keyC = if (cs.surface.luminance() < 0.5f) cs.surfaceContainerHighest else cs.surfaceContainerLowest
     var src by remember { mutableStateOf<Bitmap?>(null) }
     var fresh by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -74,7 +78,7 @@ fun BackgroundScreen(nav: NavController) {
         src = withContext(Dispatchers.IO) { KbBackground.file(ctx).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) } }
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
             val b = withContext(Dispatchers.IO) { KbBackground.decode(ctx, uri) }
             if (b == null) Snack.post("Could not open that image")
@@ -118,7 +122,10 @@ fun BackgroundScreen(nav: NavController) {
     SettingsScaffold("Background image", onBack = { nav.popBackStack() }) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(aspect).clip(CardShape).background(MaterialTheme.colorScheme.surfaceContainerHighest).onSizeChanged { frame = it }
+                Modifier.fillMaxWidth().aspectRatio(aspect).clip(CardShape)
+                    .background(cs.surfaceContainerHighest)
+                    .border(BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.65f)), CardShape)
+                    .onSizeChanged { frame = it }
                     .pointerInput(src) {
                         detectTransformGestures { _, pan, gz, _ ->
                             if (src != null && frame.width > 0) {
@@ -130,14 +137,30 @@ fun BackgroundScreen(nav: NavController) {
                     }
             ) {
                 val b = src
-                if (b == null) Text("No photo yet", Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else {
+                if (b == null) {
+                    Column(
+                        Modifier.align(Alignment.Center).padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Tile(R.drawable.ic_upload, 48.dp)
+                        Text("No background image yet", color = cs.onSurface, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Choose a photo below to preview it behind your keys.",
+                            color = cs.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
                     val img = remember(b) { b.asImageBitmap() }
                     Box(Modifier.matchParentSize().clipToBounds()) {
                         Canvas(Modifier.matchParentSize().then(if (blur > 0f) Modifier.blur(blur.dp, BlurredEdgeTreatment.Unbounded) else Modifier)) {
                             val pl = KbBackground.place(size.width, size.height, b.width, b.height, zoom, offFx, offFy)
-                            drawImage(img, IntOffset.Zero, IntSize(b.width, b.height),
-                                IntOffset(pl.left.toInt(), pl.top.toInt()), IntSize(pl.w.toInt(), pl.h.toInt()))
+                            drawImage(
+                                img, IntOffset.Zero, IntSize(b.width, b.height),
+                                IntOffset(pl.left.toInt(), pl.top.toInt()), IntSize(pl.w.toInt(), pl.h.toInt())
+                            )
                         }
                     }
                     Canvas(Modifier.matchParentSize()) {
@@ -151,34 +174,72 @@ fun BackgroundScreen(nav: NavController) {
                             keyC.copy(alpha = keyAlpha / 100f), Offset(padX + cI * (kw + gap), top + r * (kh + gap)), Size(kw, kh), CornerRadius(8.dp.toPx())
                         )
                     }
+                    Surface(
+                        Modifier.align(Alignment.TopEnd).padding(10.dp),
+                        shape = CircleShape,
+                        color = cs.surfaceContainerHigh.copy(alpha = 0.88f),
+                        contentColor = cs.onSurface
+                    ) {
+                        Text(
+                            "%.1fx".format(zoom),
+                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = MonoFontFamily),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
-            Text("Pinch to zoom and drag to position. The frame matches the keyboard.", Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-            TonalButton(if (src == null) "Choose a photo" else "Choose another photo", com.mkmehmood.everydaykeys.R.drawable.ic_upload, Modifier.fillMaxWidth()) { picker.launch("image/*") }
+            Text(
+                "Pinch to zoom and drag to position. The frame matches the keyboard.",
+                Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TonalButton(
+                    if (src == null) "Choose photo" else "Change photo",
+                    R.drawable.ic_upload,
+                    Modifier.weight(1f).testTag("bg_choose_photo_button")
+                ) { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                TonalButton(
+                    "Create with AI",
+                    R.drawable.ic_sparkle,
+                    Modifier.weight(1f).testTag("bg_create_ai_button")
+                ) { nav.navigate("image_studio") }
+            }
             Spacer(Modifier.height(16.dp))
 
             GroupCard {
-                LabeledSlider("Zoom  %.1fx".format(zoom), zoom, 1f..5f) { zoom = it; clamp() }
+                LabeledSlider("Zoom", "%.1fx".format(zoom), zoom, 1f..5f) { zoom = it; clamp() }
                 RowDivider()
-                LabeledSlider("Dimming  ${dim.toInt()}%", dim, 0f..90f) { dim = it }
+                LabeledSlider("Dimming", "${dim.toInt()}%", dim, 0f..90f) { dim = it }
                 RowDivider()
-                LabeledSlider("Blur  ${blur.toInt()}  (Android 12 and newer)", blur, 0f..25f) { blur = it }
+                LabeledSlider("Blur (Android 12+)", "${blur.toInt()} dp", blur, 0f..25f) { blur = it }
                 RowDivider()
-                LabeledSlider("Key opacity  ${keyAlpha.toInt()}%", keyAlpha, 30f..100f) { keyAlpha = it }
+                LabeledSlider("Key opacity", "${keyAlpha.toInt()}%", keyAlpha, 30f..100f) { keyAlpha = it }
             }
 
             Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PrimaryButton("Save", null, Modifier.weight(1f)) { save() }
-                SecondaryButton("Remove", null, Modifier.weight(1f)) { remove() }
+                PrimaryButton("Save", R.drawable.ic_check, Modifier.weight(1f).testTag("bg_save_button")) { save() }
+                SecondaryButton("Remove", R.drawable.ic_trash, Modifier.weight(1f).testTag("bg_remove_button")) { remove() }
             }
         }
     }
 }
 
 @Composable
-private fun LabeledSlider(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+private fun LabeledSlider(label: String, badge: String, v: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Surface(shape = CircleShape, color = cs.primaryContainer, contentColor = cs.onPrimaryContainer) {
+                Text(
+                    badge,
+                    style = MaterialTheme.typography.labelLarge.copy(fontFamily = MonoFontFamily),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
         Slider(v, onChange, valueRange = range)
     }
 }

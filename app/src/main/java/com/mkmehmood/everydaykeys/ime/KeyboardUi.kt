@@ -1,11 +1,16 @@
 package com.mkmehmood.everydaykeys.ime
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import com.mkmehmood.everydaykeys.data.KbBackground
@@ -39,8 +44,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.Typography
+import com.mkmehmood.everydaykeys.design.Dim
 import com.mkmehmood.everydaykeys.design.EveryDayKeysShapes
+import com.mkmehmood.everydaykeys.design.EveryDayKeysTypography
+import com.mkmehmood.everydaykeys.design.MonoFontFamily
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -92,9 +99,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 internal val StripH = 48.dp
 
 /** Key look chosen in settings: corner shape, font and weight. */
-internal fun layoutStyle(p: Prefs): String = p.str("layoutStyle")
-internal fun effStyle(p: Prefs): String = when (layoutStyle(p)) { "raised" -> "raised"; "flat", "pro" -> "flat"; else -> p.str("keyStyle") }
-internal fun keyShape(p: Prefs): Shape = when (layoutStyle(p)) {
+fun layoutStyle(p: Prefs): String = p.str("layoutStyle")
+fun effStyle(p: Prefs): String = when (layoutStyle(p)) { "raised" -> "raised"; "flat", "pro" -> "flat"; else -> p.str("keyStyle") }
+fun keyShape(p: Prefs): Shape = when (layoutStyle(p)) {
     "raised" -> EveryDayKeysShapes.small
     "flat" -> EveryDayKeysShapes.medium
     "pro" -> EveryDayKeysShapes.large
@@ -149,7 +156,7 @@ fun KeyboardRoot(svc: EveryDayKeysService) {
     // the keyboard is a Material 3 surface too: its panels use real Material 3 components that read this theme
     MaterialTheme(
         colorScheme = remember(dark0, p.bool("dynamicColor"), p.str("accent")) { m3Scheme(ctx0, dark0, p.bool("dynamicColor"), p.str("accent")) },
-        shapes = EveryDayKeysShapes, typography = Typography()
+        shapes = EveryDayKeysShapes, typography = EveryDayKeysTypography
     ) { KeyboardContent(svc) }
 }
 
@@ -206,6 +213,7 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
                 Panel.CURSOR -> CursorPanel(svc, c, h)
                 Panel.CONVERT -> ConvertPanel(svc, c)
                 Panel.QUICK -> QuickPanel(svc, c)
+                Panel.AI -> { AiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
             }
         }
         if (p.bool("resizeMode")) ResizeOverlay(svc, c, Modifier.matchParentSize())
@@ -236,8 +244,19 @@ fun Key(
     val base = when { tone == 2 || active -> c.accent; tone == 1 -> c.keyAlt; else -> c.key }
     val style = effStyle(p)
     val outline = style == "outline"
-    val fg = if ((tone == 2 || active) && !outline) c.onAccent else c.text
+    val fg = when {
+        outline && (tone == 2 || active) -> c.accent
+        outline -> c.text
+        tone == 2 || active -> c.onAccent
+        tone == 1 -> c.onTile
+        else -> c.text
+    }
     val shape = shapeOverride ?: keyShape(p)
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
+        label = "keyPressScale"
+    )
     // Material 3: outlined keys have no container; the pressed state is a 10% state layer of the content colour
     val fill = when {
         outline -> if (pressed) fg.copy(alpha = StateLayer.Pressed) else Color.Transparent
@@ -245,7 +264,11 @@ fun Key(
         else -> base
     }
     // elevated key style: Material 3 level-1 elevation
-    var m = (if (style == "raised") modifier.shadow(1.dp, shape) else modifier).clip(shape).background(fill)
+    var m = modifier
+        .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
+        .then(if (style == "raised") Modifier.shadow(1.5.dp, shape) else Modifier)
+        .clip(shape)
+        .background(fill)
     if (outline) m = m.border(1.5.dp, if (tone == 2 || active) c.accent else c.outline, shape)
     m = m
         .semantics { contentDescription = desc; role = Role.Button; onClick(label = desc) { tap(); true } }
@@ -282,15 +305,30 @@ fun Key(
         if (icon != null) Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(22.dp))
         else if (label != null) Text(label, color = fg, style = MaterialTheme.typography.titleLarge, maxLines = 1,
             modifier = if (hint != null) Modifier.padding(top = 8.dp) else Modifier)
-        if (hint != null && label != null) Text(hint, color = c.accent, style = MaterialTheme.typography.labelSmall, maxLines = 1, modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp))
+        if (hint != null && label != null) Text(
+            hint,
+            color = c.accent,
+            style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonoFontFamily),
+            maxLines = 1,
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp)
+        )
         if (pressed && tone == 0 && label != null && label.length <= 2 && label.isNotBlank() && p.bool("keyPreview")) {
-            val lift = with(LocalDensity.current) { 70.dp.roundToPx() }
-            val bubble = EveryDayKeysShapes.medium
+            val lift = with(LocalDensity.current) { 72.dp.roundToPx() }
+            val bubble = EveryDayKeysShapes.large
             Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -lift)) {
-                Box(
-                    Modifier.size(52.dp, 64.dp).shadow(6.dp, bubble).clip(bubble).background(c.key),
-                    contentAlignment = Alignment.Center
-                ) { Text(label, color = c.text, style = MaterialTheme.typography.headlineMedium) }
+                Surface(
+                    Modifier.size(54.dp, 66.dp),
+                    shape = bubble,
+                    color = c.panel,
+                    contentColor = c.text,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, c.outlineVariant.copy(alpha = 0.5f))
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(label, color = c.text, style = MaterialTheme.typography.headlineMedium)
+                    }
+                }
             }
         }
     }
@@ -600,6 +638,7 @@ private class Tool(val icon: Int, val desc: String, val run: (EveryDayKeysServic
 
 private fun tool(id: String): Tool? = when (id) {
     "clip" -> Tool(R.drawable.ic_clipboard, "Clipboard") { it.togglePanel(Panel.CLIP) }
+    "ai" -> Tool(R.drawable.ic_sparkle, "AI Complete & Prompt") { it.openAiPanel() }
     "snip" -> Tool(R.drawable.ic_snippet, "Text snippets") { it.togglePanel(Panel.SNIPPETS) }
     "voice" -> Tool(R.drawable.ic_mic, "Voice typing") { it.startVoice() }
     "translate" -> Tool(R.drawable.ic_translate, "Translate selected or typed text") { it.translate() }
@@ -662,20 +701,34 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val alts = svc.alts
     val items = alts ?: svc.suggestions
     val pending = if (alts == null && svc.showClipChip) svc.pendingClip else null
+    val aiComp = if (alts == null && !svc.toolsOpen && !svc.hasSelection) svc.aiCompletion else null
     val hasToolbar = svc.prefs.bool("showToolbar")
-    val noWords = items.isEmpty() && pending == null
+    val noWords = items.isEmpty() && pending == null && aiComp == null
     val showTools = hasToolbar && alts == null && (svc.toolsOpen || noWords || svc.hasSelection)
     if (!hasToolbar && noWords) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
     Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
         if (hasToolbar) ToolboxToggle(svc, c, open = showTools)
         if (showTools) { ToolIcons(svc, c); return@Row }
+        if (aiComp != null) { AiCompletionBar(svc, c, aiComp); return@Row }
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
         items.forEachIndexed { i, s ->
-            if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.outlineVariant))
-            Text(
-                s, color = c.text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) }.padding(vertical = 8.dp)
-            )
+            if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.outlineVariant.copy(alpha = 0.65f)))
+            Box(
+                Modifier.weight(1f).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
+                    .clip(EveryDayKeysShapes.small)
+                    .clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    s,
+                    color = c.text,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
         }
         if (alts != null) IconTap(R.drawable.ic_close, "Close alternates", c) { svc.alts = null }
     }

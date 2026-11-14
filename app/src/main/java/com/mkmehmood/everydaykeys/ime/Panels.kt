@@ -1,6 +1,8 @@
 package com.mkmehmood.everydaykeys.ime
 
 import android.view.KeyEvent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +29,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -49,6 +55,7 @@ import com.mkmehmood.everydaykeys.design.*
 import com.mkmehmood.everydaykeys.data.AppDb
 import com.mkmehmood.everydaykeys.data.Calc
 import com.mkmehmood.everydaykeys.data.Clip
+import com.mkmehmood.everydaykeys.data.GeminiClient
 import com.mkmehmood.everydaykeys.data.Translator
 import com.mkmehmood.everydaykeys.data.UnitDef
 import com.mkmehmood.everydaykeys.data.Units
@@ -88,11 +95,21 @@ internal fun PanelTile(c: KbColors, icon: Int, size: Dp = 34.dp, filled: Boolean
     }
 }
 
-/** A toolbar icon, 48dp tall tap target. */
+/** A toolbar icon, 48dp tall tap target with tonal pill highlight when active. */
 @Composable
 internal fun ToolTile(icon: Int, desc: String, c: KbColors, filled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Surface(onClick = onClick, modifier = modifier.height(48.dp).semantics { contentDescription = desc }, color = Color.Transparent) {
-        Box(contentAlignment = Alignment.Center) { PanelTile(c, icon, 34.dp, filled) }
+        Box(contentAlignment = Alignment.Center) {
+            if (filled) {
+                Surface(Modifier.size(36.dp), shape = CircleShape, color = c.accentContainer) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(painterResource(icon), null, tint = c.onAccentContainer, modifier = Modifier.size(20.dp))
+                    }
+                }
+            } else {
+                PanelTile(c, icon, 34.dp, false)
+            }
+        }
     }
 }
 
@@ -146,7 +163,7 @@ internal fun PanelSearch(svc: EveryDayKeysService, c: KbColors, hint: String, mo
     // a pill-shaped Material 3 search surface; tapping it sends the keyboard's letters to the search text
     Surface(
         onClick = { svc.searching = true }, modifier = modifier.height(if (flat) 40.dp else 44.dp), shape = CircleShape, color = c.key,
-        border = if (on) androidx.compose.foundation.BorderStroke(2.dp, c.accent) else null
+        border = BorderStroke(if (on) 2.dp else 1.dp, if (on) c.accent else c.outlineVariant.copy(alpha = 0.55f))
     ) {
         Row(Modifier.padding(start = 14.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(painterResource(R.drawable.ic_search), null, tint = c.sub, modifier = Modifier.size(20.dp))
@@ -227,7 +244,9 @@ internal fun RowScope.ClipChip(svc: EveryDayKeysService, c: KbColors, item: Clip
     Surface(
         onClick = { svc.feedback(); svc.pasteClips(listOf(item)) },
         modifier = Modifier.weight(if (wide) 1f else 1.15f).padding(horizontal = 3.dp).height(38.dp).semantics { contentDescription = "Paste last copied" },
-        shape = CircleShape, color = c.panel
+        shape = CircleShape, color = c.panel,
+        tonalElevation = 2.dp,
+        border = BorderStroke(0.5.dp, c.outlineVariant.copy(alpha = 0.55f))
     ) {
       Row(Modifier.padding(start = 6.dp, end = if (wide) 2.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
         PanelTile(c, R.drawable.ic_clipboard, 26.dp)
@@ -384,9 +403,19 @@ private fun ClipCard(c: KbColors, clip: Clip, selected: Boolean, onClick: () -> 
                 androidx.compose.material3.DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
             }
         }
-        IconTap(R.drawable.ic_pin, if (clip.pinned) "Unpin" else "Pin", c, if (clip.pinned) c.accent else c.text, Modifier.align(Alignment.BottomEnd).size(44.dp)) { onPin() }
-        if (clip.length > 200 || clip.filePath != null) Text(
-            "%,d chars".format(clip.length), color = c.sub, style = MaterialTheme.typography.labelSmall,
+        IconTap(R.drawable.ic_pin, if (clip.pinned) "Unpin" else "Pin", c, if (clip.pinned) c.accent else c.sub, Modifier.align(Alignment.BottomEnd).size(44.dp)) { onPin() }
+        if (selected) {
+            Surface(
+                Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 10.dp).size(24.dp),
+                shape = CircleShape,
+                color = c.accent
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_check), null, tint = c.onAccent, modifier = Modifier.size(16.dp))
+                }
+            }
+        } else if (clip.length > 200 || clip.filePath != null) Text(
+            "%,d chars".format(clip.length), color = c.sub, style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonoFontFamily),
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 14.dp)
         )
     }
@@ -510,13 +539,15 @@ internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
     }
 }
 
-/** A bottom bar tab: the icon with an accent underline when it is the open category. */
+/** A bottom bar tab: the icon with a Material 3 active pill indicator when selected. */
 @Composable
 private fun EmojiTab(c: KbColors, selected: Boolean, desc: String, onClick: () -> Unit, content: @Composable () -> Unit) {
-    Surface(onClick = onClick, color = Color.Transparent, modifier = Modifier.width(44.dp).height(44.dp).semantics { contentDescription = desc }) {
+    Surface(onClick = onClick, color = Color.Transparent, modifier = Modifier.width(46.dp).height(44.dp).semantics { contentDescription = desc }) {
         Box(contentAlignment = Alignment.Center) {
+            if (selected) Box(
+                Modifier.width(38.dp).height(30.dp).clip(CircleShape).background(c.tile)
+            )
             content()
-            if (selected) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).width(24.dp).height(3.dp).clip(CircleShape).background(c.accent))
         }
     }
 }
@@ -540,13 +571,20 @@ internal fun ConvertPanel(svc: EveryDayKeysService, c: KbColors) {
             PanelDivider(c)
             UnitRow("To", cat.units, svc.convTo, c) { svc.convTo = it }
         }
-        PanelGroup(c) {
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                PanelTile(c, R.drawable.ic_ruler)
+        Surface(
+            Modifier.fillMaxWidth(),
+            shape = PanelCard,
+            color = if (v != null) c.accentContainer else c.panel,
+            border = BorderStroke(0.5.dp, c.outlineVariant.copy(alpha = 0.5f))
+        ) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                DsTile(c.palette(), R.drawable.ic_ruler, 38.dp, filled = v != null)
                 Text(
                     if (v == null) "Type or select a number first, then open the converter."
                     else "${Calc.format(v)} ${from.id} = ${Calc.format(Units.convert(cat, v, from, to))} ${to.id}",
-                    color = c.text, style = if (v == null) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(start = 12.dp)
+                    color = if (v != null) c.onAccentContainer else c.text,
+                    style = if (v == null) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium.copy(fontFamily = MonoFontFamily),
+                    modifier = Modifier.weight(1f).padding(start = 12.dp)
                 )
             }
         }
@@ -625,10 +663,11 @@ private fun QuickBox(
     clickLabel: String = title, onToggle: ((Boolean) -> Unit)? = null, onClick: () -> Unit = {}
 ) {
     val p = c.palette()
-    val color = if (active) p.accentContainer else p.surface
+    val color by animateColorAsState(if (active) p.accentContainer else p.surface, label = "quickBoxColor")
+    val border = if (active) null else BorderStroke(0.5.dp, p.hairline.copy(alpha = 0.55f))
     val m = modifier.height(64.dp)
-    if (onToggle != null) Surface(checked = active, onCheckedChange = onToggle, modifier = m, shape = Dim.Card, color = color) { QuickBoxContent(c, icon, title, sub, active) }
-    else Surface(onClick = onClick, modifier = m.semantics { contentDescription = clickLabel }, shape = Dim.Card, color = color) { QuickBoxContent(c, icon, title, sub, active) }
+    if (onToggle != null) Surface(checked = active, onCheckedChange = onToggle, modifier = m, shape = Dim.Card, color = color, border = border) { QuickBoxContent(c, icon, title, sub, active) }
+    else Surface(onClick = onClick, modifier = m.semantics { contentDescription = clickLabel }, shape = Dim.Card, color = color, border = border) { QuickBoxContent(c, icon, title, sub, active) }
 }
 
 @Composable
@@ -664,12 +703,18 @@ internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             QuickLabel(c, "Typing")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
-                QuickTile(svc, c, R.drawable.ic_sparkle, "Suggestions", "suggestions", Modifier.weight(1f))
-                QuickTile(svc, c, R.drawable.ic_check, "Autocorrect", "autocorrect", Modifier.weight(1f), on = "mild", off = "off", onLabel = "Mild")
+                QuickTile(svc, c, R.drawable.ic_sparkle, "AI Sentence", "aiAutoComplete", Modifier.weight(1f))
+                QuickTile(svc, c, R.drawable.ic_text, "Suggestions", "suggestions", Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
-                QuickTile(svc, c, R.drawable.ic_text, "Auto-capitalize", "autoCap", Modifier.weight(1f))
+                QuickTile(svc, c, R.drawable.ic_check, "Autocorrect", "autocorrect", Modifier.weight(1f), on = "mild", off = "off", onLabel = "Mild")
+                QuickTile(svc, c, R.drawable.ic_up, "Auto-capitalize", "autoCap", Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
                 QuickTile(svc, c, R.drawable.ic_clipboard, "Clipboard", "clipEnabled", Modifier.weight(1f))
+                QuickBox(c, R.drawable.ic_sparkle, "AI Prompt", "Open panel", false, Modifier.weight(1f), clickLabel = "Open Gemini AI panel") {
+                    svc.feedback(); svc.openAiPanel()
+                }
             }
             QuickLabel(c, "Feedback")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
@@ -677,13 +722,234 @@ internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
                 QuickTile(svc, c, R.drawable.ic_sound, "Key sound", "sound", Modifier.weight(1f))
             }
             QuickLabel(c, "Look and size")
+            QuickThemeSelector(svc, c)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
-                QuickCycle(svc, c, R.drawable.ic_sun, "Theme", "theme", listOf("system" to "Auto", "light" to "Light", "dark" to "Dark"), Modifier.weight(1f))
                 QuickCycle(svc, c, R.drawable.ic_one_hand, "One-handed", "oneHanded", listOf("off" to "Off", "left" to "Left", "right" to "Right"), Modifier.weight(1f))
+                QuickTile(svc, c, R.drawable.ic_numpad, "Number row", "numberRow", Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
-                QuickTile(svc, c, R.drawable.ic_numpad, "Number row", "numberRow", Modifier.weight(1f))
                 QuickBox(c, R.drawable.ic_tune, "Resize keyboard", "Drag edges", false, Modifier.weight(1f), clickLabel = "Resize the keyboard") { svc.feedback(); svc.closePanel(); svc.setPref("resizeMode", "true") }
+            }
+        }
+    }
+}
+
+/** Explicit 3-option Material 3 selector for System, Light, and Dark modes inside the keyboard UI. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickThemeSelector(svc: EveryDayKeysService, c: KbColors) {
+    val p = c.palette()
+    val current = svc.prefs.str("theme").ifBlank { "system" }
+    val options = remember { listOf("system" to "System", "light" to "Light", "dark" to "Dark") }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = Dim.Card,
+        color = p.surface,
+        border = BorderStroke(0.5.dp, p.hairline.copy(alpha = 0.55f))
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(painterResource(R.drawable.ic_sun), null, tint = c.accent, modifier = Modifier.size(18.dp))
+                Text("Keyboard theme", color = p.text, style = MaterialTheme.typography.bodyMedium)
+            }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                options.forEachIndexed { idx, (value, label) ->
+                    val selected = current == value
+                    SegmentedButton(
+                        selected = selected,
+                        onClick = { svc.feedback(); svc.setPref("theme", value) },
+                        shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = c.accentContainer,
+                            activeContentColor = c.onAccentContainer,
+                            activeBorderColor = c.accent,
+                            inactiveContainerColor = c.key,
+                            inactiveContentColor = c.text,
+                            inactiveBorderColor = c.outlineVariant
+                        ),
+                        modifier = Modifier.testTag("kb_theme_$value").semantics { contentDescription = "Theme: $label" }
+                    ) {
+                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Gemini AI sentence completion & text-to-prompt
+
+/** Inline Material 3 pill shown in the strip when Gemini auto-completes the current sentence. */
+@Composable
+internal fun RowScope.AiCompletionBar(svc: EveryDayKeysService, c: KbColors, completion: String) {
+    Surface(
+        onClick = { svc.feedback(); svc.applyAiCompletion() },
+        modifier = Modifier.weight(1f).padding(horizontal = 3.dp).height(38.dp)
+            .semantics { contentDescription = "Insert AI completion: $completion" },
+        shape = CircleShape,
+        color = c.accentContainer,
+        contentColor = c.onAccentContainer,
+        tonalElevation = 2.dp
+    ) {
+        Row(Modifier.padding(start = 10.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(R.drawable.ic_sparkle), null, tint = c.accent, modifier = Modifier.size(18.dp))
+            Text(
+                completion.trimStart(),
+                color = c.onAccentContainer,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+            )
+            Surface(
+                shape = CircleShape,
+                color = c.accent,
+                contentColor = c.onAccent
+            ) {
+                Text(
+                    "Insert",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+            IconTap(R.drawable.ic_close, "Dismiss AI suggestion", c, c.onAccentContainer, Modifier.size(34.dp)) {
+                svc.dismissAiCompletion()
+            }
+        }
+    }
+}
+
+/** Smart sentence completion, text transformation, and Text-to-Prompt panel powered by Gemini. */
+@Composable
+internal fun AiPanel(svc: EveryDayKeysService, c: KbColors) {
+    val res = svc.aiResult
+    val quickPrompts = remember {
+        listOf(
+            "Reply politely" to "Write a polite, natural reply to this message.",
+            "Make email" to "Turn this into a clear, well-structured email.",
+            "Summarize" to "Summarize the key point in one clear sentence."
+        )
+    }
+    Column(
+        Modifier.fillMaxWidth().height(if (svc.searching) 142.dp else panelHeight(svc)).padding(2.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (!svc.searching) {
+            PanelHeader(c, "Gemini AI", "Back to keyboard", { svc.closePanel() }) {
+                IconTap(R.drawable.ic_settings, "Smart typing and AI settings", c, c.sub) { svc.openSettings() }
+            }
+        }
+        // Text-to-Prompt bar
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PanelSearch(svc, c, "Type a prompt or tap an action…", Modifier.weight(1f), flat = true)
+            if (svc.searching) {
+                IconTap(R.drawable.ic_close, "Done typing prompt", c, c.sub, Modifier.size(40.dp)) {
+                    svc.searching = false
+                }
+            }
+            Surface(
+                onClick = { svc.feedback(); svc.runAiPrompt(svc.query) },
+                shape = CircleShape,
+                color = c.accent,
+                contentColor = c.onAccent,
+                modifier = Modifier.height(40.dp).semantics { contentDescription = "Generate with Gemini" }
+            ) {
+                Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painterResource(R.drawable.ic_sparkle), null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Go", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+        // Smart completion + quick text-to-prompt chips
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            itemsIndexed(GeminiClient.SmartAction.entries) { _, act ->
+                PanelChip(c, act.label, false, "Smart ${act.label}") {
+                    svc.feedback(); svc.runAiSmart(act)
+                }
+            }
+            itemsIndexed(quickPrompts) { _, (label, prompt) ->
+                PanelChip(c, label, false, label) {
+                    svc.feedback(); svc.query = label; svc.runAiPrompt(prompt)
+                }
+            }
+        }
+        // Result / loading / idle area (collapsed while typing prompt so keys remain visible)
+        if (!svc.searching) {
+            PanelGroup(c, Modifier.weight(1f)) {
+                when {
+                    res == null -> Column(
+                        Modifier.fillMaxSize().padding(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        DsTile(c.palette(), R.drawable.ic_sparkle, 40.dp, filled = false)
+                        Text(
+                            "Smart Sentence Completion & Text-to-Prompt",
+                            color = c.text,
+                            style = MaterialTheme.typography.titleSmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Text(
+                            "Tap Complete/Polish above for your current text, or tap the prompt bar to write any Gemini instruction.",
+                            color = c.sub,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    res.loading -> Column(
+                        Modifier.fillMaxSize().padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Generating with Gemini…", color = c.text, style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(10.dp))
+                        LinearProgressIndicator(
+                            color = c.accent,
+                            trackColor = c.accentContainer,
+                            modifier = Modifier.fillMaxWidth(0.75f)
+                        )
+                    }
+                    res.message != null -> Column(
+                        Modifier.fillMaxSize().padding(14.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(painterResource(R.drawable.ic_info), null, tint = c.accent, modifier = Modifier.size(26.dp))
+                        Text(
+                            res.message,
+                            color = c.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    res.text != null -> Column(Modifier.fillMaxSize().padding(8.dp)) {
+                        Box(
+                            Modifier.weight(1f).fillMaxWidth().clip(PanelField)
+                                .background(if (c.key == c.panel) c.bg else c.key)
+                                .verticalScroll(rememberScrollState()).padding(12.dp)
+                        ) {
+                            Text(res.text, color = c.text, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            IconTap(R.drawable.ic_reset, "Regenerate", c, c.sub, Modifier.size(40.dp)) { svc.retryAi() }
+                            PanelButton(
+                                svc, c,
+                                if (res.replaceExisting) "Replace text" else "Insert",
+                                R.drawable.ic_check,
+                                primary = true,
+                                modifier = Modifier.weight(1f)
+                            ) { svc.applyAiResult() }
+                        }
+                    }
+                }
             }
         }
     }
