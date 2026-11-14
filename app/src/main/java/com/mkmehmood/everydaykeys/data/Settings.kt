@@ -46,7 +46,7 @@ class Section(val id: String, val title: String, val desc: String, val icon: Int
 
 object Defs {
     private val tools = listOf(
-        "clip" to "Clipboard", "ai" to "AI Complete & Prompt", "snip" to "Snippets", "voice" to "Voice typing", "translate" to "Translate",
+        "clip" to "Clipboard", "snip" to "Snippets", "voice" to "Voice typing", "translate" to "Translate",
         "style" to "Switch layout style", "undo" to "Undo", "redo" to "Redo", "cursor" to "Cursor and edit keys", "convert" to "Unit converter", "quick" to "Quick settings", "settings" to "Settings"
     )
 
@@ -73,9 +73,7 @@ object Defs {
         Section("snippets", "Text snippets", "Shortcuts such as ;addr", R.drawable.ic_snippet, listOf(
             Action("snippets", "Manage snippets", "Add, edit, delete, set shortcuts")
         )),
-        Section("smart", "Smart typing", "Gemini AI completion, autocorrect, suggestions", R.drawable.ic_sparkle, listOf(
-            Toggle("aiAutoComplete", "AI auto sentence completion (Gemini)", true),
-            Choice("aiTone", "AI writing tone", listOf("natural" to "Natural", "professional" to "Professional", "concise" to "Concise", "friendly" to "Friendly"), "natural"),
+        Section("smart", "Smart typing", "Autocorrect, word suggestions, learned pairs", R.drawable.ic_sparkle, listOf(
             Choice("autocorrect", "Autocorrect", listOf("off" to "Off", "mild" to "Mild", "strong" to "Strong"), "mild"),
             Toggle("suggestions", "Word suggestions", true),
             Choice("suggestCount", "Suggestions shown", listOf("2" to "2", "3" to "3", "4" to "4"), "3"),
@@ -87,8 +85,7 @@ object Defs {
             Toggle("autoCap", "Auto-capitalization", true),
             Toggle("doubleSpace", "Double-space for a period", true),
             Action("dictionary", "Personal dictionary", "Add or remove your own words"),
-            Action("aiNote", "Gemini AI sentence completion & prompt", "Uses GEMINI_API_KEY injected at build time via AI Studio Secrets or GitHub Actions Secrets. Auto-completion sends only the current sentence context when enabled; Text-to-Prompt runs only when tapped."),
-            Action("localNote", "Local typing by default", "Word suggestions and autocorrect run on-device. Online word suggestions are optional and off by default.")
+            Action("localNote", "Free, local typing by default", "Autocorrect, word completion, and next-word predictions run on-device with no API key. Optional live online suggestions use free Datamuse lookups and are off by default.")
         )),
         Section("translate", "Translation", "Translate selected or typed text", R.drawable.ic_translate, listOf(
             Choice("translateProvider", "Provider", listOf("mymemory" to "MyMemory (free, no key)", "google" to "Google Cloud (your key)", "deepl" to "DeepL Free (your key)"), "mymemory"),
@@ -112,7 +109,6 @@ object Defs {
             Toggle("dynamicColor", "Material You dynamic color (Android 12+, follows your wallpaper)", true),
             Choice("accent", "Accent color (when Material You is off)", listOf("teal" to "Teal", "blue" to "Blue", "purple" to "Purple", "orange" to "Orange"), "teal"),
             Action("bgEdit", "Background image", "Choose a photo, crop, zoom, dim, blur"),
-            Action("imageStudio", "Create & edit images", "Generate or edit images with Gemini Nano Banana 2.1"),
             Toggle("bgOn", "Show background image", false),
             Slide("bgDim", "Image dimming (%)", 0, 90, 35),
             Slide("bgBlur", "Image blur (Android 12+)", 0, 25, 0),
@@ -130,7 +126,7 @@ object Defs {
         )),
         Section("toolbar", "Toolbar", "Choose and order tools", R.drawable.ic_keyboard, listOf(
             Toggle("showToolbar", "Toolbox button and toolbar", true),
-            Multi("toolbarItems", "Tools (use the arrows to reorder)", tools, "clip,ai,snip,voice,translate,undo,redo,cursor,settings")
+            Multi("toolbarItems", "Tools (use the arrows to reorder)", tools, "clip,snip,voice,translate,undo,redo,cursor,settings")
         )),
         Section("privacy", "Privacy and data", "On this phone unless you use online tools", R.drawable.ic_lock, listOf(
             Toggle("hideLauncher", "Hide app icon from the launcher", false),

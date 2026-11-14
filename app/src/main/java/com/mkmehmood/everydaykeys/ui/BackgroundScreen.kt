@@ -194,18 +194,11 @@ fun BackgroundScreen(nav: NavController) {
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TonalButton(
-                    if (src == null) "Choose photo" else "Change photo",
-                    R.drawable.ic_upload,
-                    Modifier.weight(1f).testTag("bg_choose_photo_button")
-                ) { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                TonalButton(
-                    "Create with AI",
-                    R.drawable.ic_sparkle,
-                    Modifier.weight(1f).testTag("bg_create_ai_button")
-                ) { nav.navigate("image_studio") }
-            }
+            TonalButton(
+                if (src == null) "Choose photo" else "Change photo",
+                R.drawable.ic_upload,
+                Modifier.fillMaxWidth().testTag("bg_choose_photo_button")
+            ) { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             Spacer(Modifier.height(16.dp))
 
             GroupCard {

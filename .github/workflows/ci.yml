@@ -18,26 +18,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Configure Gemini API key
-        shell: bash
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          if [ -n "$GEMINI_API_KEY" ]; then
-            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" > .env
-          fi
-
       - name: Unit tests and debug build
         shell: bash
         run: |
           set -o pipefail
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleDebug --console=plain 2>&1 | tee build.log
-
-      - name: Clean temporary secret file
-        if: always()
-        shell: bash
-        run: rm -f .env
 
       - name: Show errors
         if: failure()

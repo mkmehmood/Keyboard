@@ -55,7 +55,6 @@ import com.mkmehmood.everydaykeys.design.*
 import com.mkmehmood.everydaykeys.data.AppDb
 import com.mkmehmood.everydaykeys.data.Calc
 import com.mkmehmood.everydaykeys.data.Clip
-import com.mkmehmood.everydaykeys.data.GeminiClient
 import com.mkmehmood.everydaykeys.data.Translator
 import com.mkmehmood.everydaykeys.data.UnitDef
 import com.mkmehmood.everydaykeys.data.Units
@@ -703,18 +702,12 @@ internal fun QuickPanel(svc: EveryDayKeysService, c: KbColors) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             QuickLabel(c, "Typing")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
-                QuickTile(svc, c, R.drawable.ic_sparkle, "AI Sentence", "aiAutoComplete", Modifier.weight(1f))
                 QuickTile(svc, c, R.drawable.ic_text, "Suggestions", "suggestions", Modifier.weight(1f))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
                 QuickTile(svc, c, R.drawable.ic_check, "Autocorrect", "autocorrect", Modifier.weight(1f), on = "mild", off = "off", onLabel = "Mild")
-                QuickTile(svc, c, R.drawable.ic_up, "Auto-capitalize", "autoCap", Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
+                QuickTile(svc, c, R.drawable.ic_up, "Auto-capitalize", "autoCap", Modifier.weight(1f))
                 QuickTile(svc, c, R.drawable.ic_clipboard, "Clipboard", "clipEnabled", Modifier.weight(1f))
-                QuickBox(c, R.drawable.ic_sparkle, "AI Prompt", "Open panel", false, Modifier.weight(1f), clickLabel = "Open Gemini AI panel") {
-                    svc.feedback(); svc.openAiPanel()
-                }
             }
             QuickLabel(c, "Feedback")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = side) {
@@ -778,189 +771,4 @@ private fun QuickThemeSelector(svc: EveryDayKeysService, c: KbColors) {
             }
         }
     }
-}
-
-// ---------------------------------------------------------------- Gemini AI sentence completion & text-to-prompt
-
-/** Inline Material 3 pill shown in the strip when Gemini auto-completes the current sentence. */
-@Composable
-internal fun RowScope.AiCompletionBar(svc: EveryDayKeysService, c: KbColors, completion: String) {
-    Surface(
-        onClick = { svc.feedback(); svc.applyAiCompletion() },
-        modifier = Modifier.weight(1f).padding(horizontal = 3.dp).height(38.dp)
-            .semantics { contentDescription = "Insert AI completion: $completion" },
-        shape = CircleShape,
-        color = c.accentContainer,
-        contentColor = c.onAccentContainer,
-        tonalElevation = 2.dp
-    ) {
-        Row(Modifier.padding(start = 10.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(R.drawable.ic_sparkle), null, tint = c.accent, modifier = Modifier.size(18.dp))
-            Text(
-                completion.trimStart(),
-                color = c.onAccentContainer,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-            )
-            Surface(
-                shape = CircleShape,
-                color = c.accent,
-                contentColor = c.onAccent
-            ) {
-                Text(
-                    "Insert",
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                )
-            }
-            IconTap(R.drawable.ic_close, "Dismiss AI suggestion", c, c.onAccentContainer, Modifier.size(34.dp)) {
-                svc.dismissAiCompletion()
-            }
-        }
-    }
-}
-
-/** Smart sentence completion, text transformation, and Text-to-Prompt panel powered by Gemini. */
-@Composable
-internal fun AiPanel(svc: EveryDayKeysService, c: KbColors) {
-    val ctx = LocalContext.current
-    val res = svc.aiResult
-    val liveQuota = rememberLiveQuota()
-    var showQuota by remember { mutableStateOf(false) }
-    val quickPrompts = remember {
-        listOf(
-            "Reply politely" to "Write a polite, natural reply to this message.",
-            "Make email" to "Turn this into a clear, well-structured email.",
-            "Summarize" to "Summarize the key point in one clear sentence."
-        )
-    }
-    Column(
-        Modifier.fillMaxWidth().height(if (svc.searching) 142.dp else panelHeight(svc)).padding(2.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        if (!svc.searching) {
-            PanelHeader(c, "Gemini AI", "Back to keyboard", { svc.closePanel() }) {
-                LiveQuotaPill(liveQuota, c.palette()) { svc.feedback(); showQuota = !showQuota }
-                IconTap(R.drawable.ic_settings, "Smart typing and AI settings", c, c.sub) { svc.openSettings() }
-            }
-        }
-        // Text-to-Prompt bar
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PanelSearch(svc, c, "Type a prompt or tap an action…", Modifier.weight(1f), flat = true)
-            if (svc.searching) {
-                IconTap(R.drawable.ic_close, "Done typing prompt", c, c.sub, Modifier.size(40.dp)) {
-                    svc.searching = false
-                }
-            }
-            Surface(
-                onClick = { svc.feedback(); svc.runAiPrompt(svc.query) },
-                shape = CircleShape,
-                color = c.accent,
-                contentColor = c.onAccent,
-                modifier = Modifier.height(40.dp).semantics { contentDescription = "Generate with Gemini" }
-            ) {
-                Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_sparkle), null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Go", style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        }
-        // Smart completion + quick text-to-prompt chips
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            itemsIndexed(GeminiClient.SmartAction.entries) { _, act ->
-                PanelChip(c, act.label, false, "Smart ${act.label}") {
-                    svc.feedback(); showQuota = false; svc.runAiSmart(act)
-                }
-            }
-            itemsIndexed(quickPrompts) { _, (label, prompt) ->
-                PanelChip(c, label, false, label) {
-                    svc.feedback(); showQuota = false; svc.query = label; svc.runAiPrompt(prompt)
-                }
-            }
-        }
-        // Result / loading / idle area (collapsed while typing prompt so keys remain visible)
-        if (!svc.searching) {
-            if (showQuota) {
-                Box(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    LiveQuotaDetailsCard(liveQuota, c.palette(), ctx, compact = true)
-                }
-            } else {
-                PanelGroup(c, Modifier.weight(1f)) {
-                    when {
-                        res == null -> Column(
-                        Modifier.fillMaxSize().padding(14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        DsTile(c.palette(), R.drawable.ic_sparkle, 40.dp, filled = false)
-                        Text(
-                            "Smart Sentence Completion & Text-to-Prompt",
-                            color = c.text,
-                            style = MaterialTheme.typography.titleSmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        Text(
-                            "Tap Complete/Polish above for your current text, or tap the prompt bar to write any Gemini instruction.",
-                            color = c.sub,
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                    res.loading -> Column(
-                        Modifier.fillMaxSize().padding(16.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Generating with Gemini…", color = c.text, style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.height(10.dp))
-                        LinearProgressIndicator(
-                            color = c.accent,
-                            trackColor = c.accentContainer,
-                            modifier = Modifier.fillMaxWidth(0.75f)
-                        )
-                    }
-                    res.message != null -> Column(
-                        Modifier.fillMaxSize().padding(14.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(painterResource(R.drawable.ic_info), null, tint = c.accent, modifier = Modifier.size(26.dp))
-                        Text(
-                            res.message,
-                            color = c.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-                    res.text != null -> Column(Modifier.fillMaxSize().padding(8.dp)) {
-                        Box(
-                            Modifier.weight(1f).fillMaxWidth().clip(PanelField)
-                                .background(if (c.key == c.panel) c.bg else c.key)
-                                .verticalScroll(rememberScrollState()).padding(12.dp)
-                        ) {
-                            Text(res.text, color = c.text, style = MaterialTheme.typography.bodyMedium)
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IconTap(R.drawable.ic_reset, "Regenerate", c, c.sub, Modifier.size(40.dp)) { svc.retryAi() }
-                            PanelButton(
-                                svc, c,
-                                if (res.replaceExisting) "Replace text" else "Insert",
-                                R.drawable.ic_check,
-                                primary = true,
-                                modifier = Modifier.weight(1f)
-                            ) { svc.applyAiResult() }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 }

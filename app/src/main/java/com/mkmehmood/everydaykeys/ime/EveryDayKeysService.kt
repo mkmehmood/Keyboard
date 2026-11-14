@@ -39,7 +39,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 
 enum class Mode { LETTERS, NUMPAD, SYM1, SYM2, SYM3, SYM4 }
-enum class Panel { NONE, CLIP, SNIPPETS, EMOJI, CURSOR, CONVERT, QUICK, AI }
+enum class Panel { NONE, CLIP, SNIPPETS, EMOJI, CURSOR, CONVERT, QUICK }
 enum class Shift { OFF, ONCE, LOCK }
 
 class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
@@ -95,22 +95,6 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var onlineJob: kotlinx.coroutines.Job? = null
     var alts by mutableStateOf<List<String>?>(null)
     var progress by mutableStateOf<Float?>(null)
-
-    // ---- Gemini AI completion & text-to-prompt ----
-    var aiCompletion by mutableStateOf<String?>(null)
-    class AiResult(
-        val text: String? = null,
-        val message: String? = null,
-        val loading: Boolean = false,
-        val replaceExisting: Boolean = false,
-        val raw: String = "",
-        val selected: Boolean = false
-    )
-    var aiResult by mutableStateOf<AiResult?>(null)
-    private var aiAutoJob: Job? = null
-    private var aiPanelJob: Job? = null
-    private var lastAiAction: GeminiClient.SmartAction? = null
-    private var lastAiPrompt: String? = null
 
     /** A short confirmation (Copied, Pasted, Undo...) shown over the keyboard for a moment. */
     class Notice(val icon: Int, val text: String, val action: String? = null, val onAction: (() -> Unit)? = null)
@@ -240,10 +224,6 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         progress = null
         alts = null
         trans = null
-        aiCompletion = null
-        aiResult = null
-        aiAutoJob?.cancel()
-        aiPanelJob?.cancel()
         val numeric = cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE || cls == InputType.TYPE_CLASS_DATETIME
         mode = if (numeric && prefs.bool("autoNumPad")) Mode.NUMPAD else Mode.LETTERS
         shift = Shift.OFF
@@ -431,12 +411,9 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     fun onEnter() {
-        if (searching && panel == Panel.AI) { searching = false; runAiPrompt(query); return }
         if (searching) { searching = false; return }
         val ic = currentInputConnection ?: return
         touch()
-        aiCompletion = null
-        aiAutoJob?.cancel()
         if (smart) expandAndCorrect(ic)
         resetTypingState()
         val opts = info?.imeOptions ?: 0
@@ -476,11 +453,8 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     fun refreshSuggestions() {
         onlineJob?.cancel()
-        aiAutoJob?.cancel()
-        aiCompletion = null
         if (!smart || !prefs.bool("suggestions") || lang != "en") {
             suggestions = emptyList()
-            scheduleAiAutoComplete()
             return
         }
         val ic = currentInputConnection
@@ -497,7 +471,6 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
             if (shift != Shift.OFF) next = next.map { it.replaceFirstChar { c -> c.uppercase() } }
             suggestions = next
             if (suggestions.isNotEmpty() && alts == null) toolsOpen = false
-            scheduleAiAutoComplete()
             return
         }
         val head = b.dropLast(w.length)
@@ -515,47 +488,6 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 suggestions = (local.take(n - 1) + online + local.drop(n - 1)).distinctBy { it.lowercase() }.take(n)
             }
         }
-        scheduleAiAutoComplete()
-    }
-
-    private fun scheduleAiAutoComplete() {
-        if (!smart || !prefs.bool("aiAutoComplete") || panel != Panel.NONE || mode != Mode.LETTERS || searching || trans != null) return
-        if (!GeminiClient.isConfigured()) return
-        val ic = currentInputConnection ?: return
-        val after = ic.getTextAfterCursor(1, 0)?.toString().orEmpty()
-        if (after.isNotEmpty() && !after[0].isWhitespace()) return
-        val fullBefore = ic.getTextBeforeCursor(240, 0)?.toString().orEmpty()
-        val trimmed = fullBefore.trim()
-        if (trimmed.length < 12 || trimmed.count { it == ' ' } < 2) return
-        if (trimmed.last() in ".!?") return
-        val snapshot = fullBefore.takeLast(48)
-        val tone = prefs.str("aiTone").ifBlank { "natural" }
-        val curLang = lang
-        aiAutoJob = scope.launch {
-            delay(1_200L)
-            val currentTail = currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
-            if (currentTail != snapshot) return@launch
-            val prediction = runCatching { GeminiClient.autoComplete(fullBefore, tone, curLang) }.getOrNull()
-            if (prediction.isNullOrBlank()) return@launch
-            if (currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty() == snapshot) {
-                aiCompletion = prediction
-            }
-        }
-    }
-
-    fun applyAiCompletion() {
-        val comp = aiCompletion ?: return
-        val ic = currentInputConnection ?: return
-        touch()
-        resetTypingState()
-        ic.commitText(comp, 1)
-        aiCompletion = null
-        afterTyped()
-    }
-
-    fun dismissAiCompletion() {
-        aiAutoJob?.cancel()
-        aiCompletion = null
     }
 
     fun applySuggestion(s: String) {
@@ -772,116 +704,4 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     fun dismissTranslation() { transJob?.cancel(); trans = null }
-
-    // ---- Gemini AI Assist Panel & Text-to-Prompt ----
-    fun openAiPanel() {
-        if (panel == Panel.AI) { closePanel(); return }
-        openPanel(Panel.AI)
-        aiPanelJob?.cancel()
-        aiResult = if (!GeminiClient.isConfigured()) {
-            AiResult(message = "GEMINI_API_KEY is not set. Add it in AI Studio Secrets or GitHub Actions Secrets to enable Gemini AI.")
-        } else null
-    }
-
-    private fun captureEditorContext(): Pair<String, Boolean> {
-        val ic = currentInputConnection ?: return "" to false
-        val sel = ic.getSelectedText(0)?.toString().orEmpty()
-        if (sel.isNotEmpty()) return sel to true
-        val before = ic.getTextBeforeCursor(1000, 0)?.toString().orEmpty()
-        return before to false
-    }
-
-    fun runAiSmart(action: GeminiClient.SmartAction) {
-        if (sensitive) { aiResult = AiResult(message = "AI completion is disabled in password fields."); return }
-        val (raw, selected) = captureEditorContext()
-        if (raw.trim().isEmpty()) {
-            aiResult = AiResult(message = "Type or select some text in your app first, or enter a prompt above.")
-            return
-        }
-        val replaceExisting = selected || action != GeminiClient.SmartAction.COMPLETE
-        lastAiAction = action
-        lastAiPrompt = null
-        aiPanelJob?.cancel()
-        aiResult = AiResult(loading = true, replaceExisting = replaceExisting, raw = raw, selected = selected)
-        val tone = prefs.str("aiTone").ifBlank { "natural" }
-        val curLang = lang
-        aiPanelJob = scope.launch {
-            aiResult = try {
-                val out = GeminiClient.smartTransform(raw, action, selected, tone, curLang)
-                val formatted = if (!replaceExisting && raw.isNotEmpty() && !raw.last().isWhitespace() &&
-                    out.firstOrNull()?.let { it !in ".,;:!?)]}…" && !it.isWhitespace() } == true
-                ) " $out" else out
-                AiResult(text = formatted, replaceExisting = replaceExisting, raw = raw, selected = selected)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: GeminiClient.Failure) {
-                AiResult(message = e.message)
-            } catch (e: Exception) {
-                AiResult(message = "Gemini error: ${e.localizedMessage ?: e.javaClass.simpleName}")
-            }
-        }
-    }
-
-    fun runAiPrompt(promptText: String) {
-        if (sensitive) { aiResult = AiResult(message = "AI Text-to-Prompt is disabled in password fields."); return }
-        val (raw, selected) = captureEditorContext()
-        val pText = promptText.trim()
-        if (pText.isEmpty() && raw.trim().isEmpty()) {
-            aiResult = AiResult(message = "Enter a prompt above or type/select text first.")
-            return
-        }
-        val replaceExisting = selected || (pText.isEmpty() && raw.isNotEmpty())
-        lastAiAction = null
-        lastAiPrompt = pText
-        searching = false
-        aiPanelJob?.cancel()
-        aiResult = AiResult(loading = true, replaceExisting = replaceExisting, raw = raw, selected = selected)
-        val tone = prefs.str("aiTone").ifBlank { "natural" }
-        val curLang = lang
-        aiPanelJob = scope.launch {
-            aiResult = try {
-                val out = GeminiClient.textToPrompt(pText, raw, tone, curLang)
-                AiResult(text = out, replaceExisting = replaceExisting, raw = raw, selected = selected)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: GeminiClient.Failure) {
-                AiResult(message = e.message)
-            } catch (e: Exception) {
-                AiResult(message = "Gemini error: ${e.localizedMessage ?: e.javaClass.simpleName}")
-            }
-        }
-    }
-
-    fun retryAi() {
-        val act = lastAiAction
-        val pr = lastAiPrompt
-        when {
-            act != null -> runAiSmart(act)
-            pr != null -> runAiPrompt(pr)
-        }
-    }
-
-    fun applyAiResult() {
-        val r = aiResult ?: return
-        val out = r.text ?: return
-        val ic = currentInputConnection ?: return
-        touch()
-        resetTypingState()
-        ic.beginBatchEdit()
-        if (r.replaceExisting) {
-            if (!r.selected && r.raw.isNotEmpty()) {
-                val currentBefore = ic.getTextBeforeCursor(r.raw.length, 0)?.toString()
-                if (currentBefore == r.raw) ic.deleteSurroundingText(r.raw.length, 0)
-            }
-            ic.commitText(out, 1)
-        } else {
-            ic.commitText(out, 1)
-        }
-        ic.endBatchEdit()
-        aiResult = null
-        query = ""
-        closePanel()
-        afterTyped()
-        showNotice(R.drawable.ic_sparkle, "Inserted Gemini text")
-    }
 }

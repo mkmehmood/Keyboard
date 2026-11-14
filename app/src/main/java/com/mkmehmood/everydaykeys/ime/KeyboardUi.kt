@@ -213,7 +213,6 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
                 Panel.CURSOR -> CursorPanel(svc, c, h)
                 Panel.CONVERT -> ConvertPanel(svc, c)
                 Panel.QUICK -> QuickPanel(svc, c)
-                Panel.AI -> { AiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
             }
         }
         if (p.bool("resizeMode")) ResizeOverlay(svc, c, Modifier.matchParentSize())
@@ -638,7 +637,6 @@ private class Tool(val icon: Int, val desc: String, val run: (EveryDayKeysServic
 
 private fun tool(id: String): Tool? = when (id) {
     "clip" -> Tool(R.drawable.ic_clipboard, "Clipboard") { it.togglePanel(Panel.CLIP) }
-    "ai" -> Tool(R.drawable.ic_sparkle, "AI Complete & Prompt") { it.openAiPanel() }
     "snip" -> Tool(R.drawable.ic_snippet, "Text snippets") { it.togglePanel(Panel.SNIPPETS) }
     "voice" -> Tool(R.drawable.ic_mic, "Voice typing") { it.startVoice() }
     "translate" -> Tool(R.drawable.ic_translate, "Translate selected or typed text") { it.translate() }
@@ -701,15 +699,13 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val alts = svc.alts
     val items = alts ?: svc.suggestions
     val pending = if (alts == null && svc.showClipChip) svc.pendingClip else null
-    val aiComp = if (alts == null && !svc.toolsOpen && !svc.hasSelection) svc.aiCompletion else null
     val hasToolbar = svc.prefs.bool("showToolbar")
-    val noWords = items.isEmpty() && pending == null && aiComp == null
+    val noWords = items.isEmpty() && pending == null
     val showTools = hasToolbar && alts == null && (svc.toolsOpen || noWords || svc.hasSelection)
     if (!hasToolbar && noWords) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
     Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
         if (hasToolbar) ToolboxToggle(svc, c, open = showTools)
         if (showTools) { ToolIcons(svc, c); return@Row }
-        if (aiComp != null) { AiCompletionBar(svc, c, aiComp); return@Row }
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
         items.forEachIndexed { i, s ->
             if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.outlineVariant.copy(alpha = 0.65f)))

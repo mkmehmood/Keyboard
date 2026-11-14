@@ -125,7 +125,6 @@ fun AppNav() {
         composable("s/{id}") { SectionScreen(it.arguments?.getString("id") ?: "lang", nav) }
         composable("snippets") { SnippetsScreen(nav) }
         composable("background") { BackgroundScreen(nav) }
-        composable("image_studio") { ImageStudioScreen(nav) }
         composable("dictionary") { DictScreen(nav) }
     }
 }
@@ -187,30 +186,6 @@ fun HomeScreen(nav: NavController) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (q.isBlank()) {
                 item { StatusCard(ctx, status.first, status.second) }
-                item {
-                    KeyboardThemeCard(
-                        selected = prefs.str("theme"),
-                        onSelect = { commitSetting(ctx, scope, "theme", it) }
-                    )
-                }
-                item {
-                    val liveQuota = rememberLiveQuota()
-                    val pal = settingsPalette()
-                    GroupCard {
-                        ListRow(
-                            "Create & edit images",
-                            Modifier.clickable { nav.navigate("image_studio") }.testTag("home_image_studio_card"),
-                            sub = "Create or edit images from prompts with Gemini Nano Banana 2.1",
-                            leading = { Tile(R.drawable.ic_sparkle, filled = true) },
-                            trailing = {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    LiveQuotaPill(liveQuota, pal)
-                                    Ic(R.drawable.ic_right, null, cs.onSurfaceVariant)
-                                }
-                            }
-                        )
-                    }
-                }
                 sectionGroups.forEach { (groupTitle, ids) ->
                     val itemsInGroup = ids.mapNotNull { sectionsById[it] }
                     if (itemsInGroup.isNotEmpty()) {
@@ -356,50 +331,6 @@ private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
     }
 }
 
-/** Dedicated Material 3 theme mode selector card for Light, Dark, and System default. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun KeyboardThemeCard(selected: String, onSelect: (String) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val options = remember {
-        listOf(
-            "system" to "System",
-            "light" to "Light",
-            "dark" to "Dark"
-        )
-    }
-    GroupCard {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Tile(R.drawable.ic_sun, filled = true)
-                Column(Modifier.weight(1f)) {
-                    Text("Keyboard theme", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
-                    Text(
-                        "Switch between Light, Dark, or System default",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = cs.onSurfaceVariant
-                    )
-                }
-            }
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                options.forEachIndexed { idx, (value, label) ->
-                    SegmentedButton(
-                        selected = selected == value,
-                        onClick = { onSelect(value) },
-                        shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size),
-                        modifier = Modifier.testTag("theme_selector_$value")
-                    ) {
-                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------- live preview
 
 /** Live miniature Material 3 keyboard preview shown on Appearance and Key Style screens. */
@@ -496,7 +427,7 @@ private fun LiveKeyboardPreview(prefs: Prefs) {
 
 // ---------------------------------------------------------------- rows
 
-private val InlineSegmentedKeys = setOf("theme", "keyStyle", "autocorrect", "pasteSpeed", "oneHanded", "suggestCount", "aiTone")
+private val InlineSegmentedKeys = setOf("theme", "keyStyle", "autocorrect", "pasteSpeed", "oneHanded", "suggestCount")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -635,7 +566,7 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
             val desc = if (item.id == "version")
                 runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty()
             else item.desc
-            val note = item.id == "version" || item.id == "privacyNote" || item.id == "localNote" || item.id == "translateNote" || item.id == "layoutNote" || item.id == "aiNote"
+            val note = item.id == "version" || item.id == "privacyNote" || item.id == "localNote" || item.id == "translateNote" || item.id == "layoutNote"
             when {
                 item.id == "version" -> ListRow(
                     item.title,
@@ -816,7 +747,6 @@ fun SectionScreen(id: String, nav: NavController) {
     fun onAction(a: Action) {
         when (a.id) {
             "bgEdit" -> nav.navigate("background")
-            "imageStudio" -> nav.navigate("image_studio")
             "resizeKb" -> { commitSetting(ctx, scope, "resizeMode", "true"); toast("Tap the box at the bottom to open the keyboard, then drag its edges") }
             "snippets" -> nav.navigate("snippets")
             "dictionary" -> nav.navigate("dictionary")
@@ -843,15 +773,6 @@ fun SectionScreen(id: String, nav: NavController) {
             Text(s.desc, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 14.dp))
             AnimatedVisibility(visible = id == "appearance" || id == "keystyle") {
                 LiveKeyboardPreview(prefs)
-            }
-            if (id == "smart") {
-                val liveQuota = rememberLiveQuota()
-                LiveQuotaDetailsCard(
-                    live = liveQuota,
-                    pal = settingsPalette(),
-                    ctx = ctx,
-                    modifier = Modifier.padding(bottom = 14.dp)
-                )
             }
             GroupCard {
                 s.items.forEachIndexed { i, item ->

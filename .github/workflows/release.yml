@@ -47,17 +47,6 @@ jobs:
             echo "KEY_PASSWORD=$KP"
           } >> "$GITHUB_ENV"
 
-      - name: Configure Gemini API key
-        shell: bash
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          if [ -n "$GEMINI_API_KEY" ]; then
-            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" > .env
-          else
-            echo "::warning::GEMINI_API_KEY secret is not set in GitHub Actions repository secrets; AI features will require a key."
-          fi
-
       - name: Unit tests
         shell: bash
         run: |
@@ -70,11 +59,6 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           ./gradlew assembleRelease --console=plain 2>&1 | tee build.log
-
-      - name: Clean temporary secret file
-        if: always()
-        shell: bash
-        run: rm -f .env
 
       - name: Name the APK
         run: cp app/build/outputs/apk/release/app-release.apk EverydayKeys.apk
