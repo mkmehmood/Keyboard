@@ -194,13 +194,20 @@ fun HomeScreen(nav: NavController) {
                     )
                 }
                 item {
+                    val liveQuota = rememberLiveQuota()
+                    val pal = settingsPalette()
                     GroupCard {
                         ListRow(
                             "Create & edit images",
                             Modifier.clickable { nav.navigate("image_studio") }.testTag("home_image_studio_card"),
                             sub = "Create or edit images from prompts with Gemini Nano Banana 2.1",
                             leading = { Tile(R.drawable.ic_sparkle, filled = true) },
-                            trailing = { Ic(R.drawable.ic_right, null, cs.onSurfaceVariant) }
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    LiveQuotaPill(liveQuota, pal)
+                                    Ic(R.drawable.ic_right, null, cs.onSurfaceVariant)
+                                }
+                            }
                         )
                     }
                 }
@@ -836,6 +843,15 @@ fun SectionScreen(id: String, nav: NavController) {
             Text(s.desc, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 14.dp))
             AnimatedVisibility(visible = id == "appearance" || id == "keystyle") {
                 LiveKeyboardPreview(prefs)
+            }
+            if (id == "smart") {
+                val liveQuota = rememberLiveQuota()
+                LiveQuotaDetailsCard(
+                    live = liveQuota,
+                    pal = settingsPalette(),
+                    ctx = ctx,
+                    modifier = Modifier.padding(bottom = 14.dp)
+                )
             }
             GroupCard {
                 s.items.forEachIndexed { i, item ->

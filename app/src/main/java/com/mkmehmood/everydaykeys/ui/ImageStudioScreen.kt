@@ -36,6 +36,10 @@ import com.mkmehmood.everydaykeys.data.GeminiClient
 import com.mkmehmood.everydaykeys.data.KbBackground
 import com.mkmehmood.everydaykeys.data.SettingsRepo
 import com.mkmehmood.everydaykeys.design.Dim
+import com.mkmehmood.everydaykeys.design.LiveQuotaDetailsCard
+import com.mkmehmood.everydaykeys.design.LiveQuotaPill
+import com.mkmehmood.everydaykeys.design.rememberLiveQuota
+import com.mkmehmood.everydaykeys.design.settingsPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -64,6 +68,9 @@ fun ImageStudioScreen(nav: NavController) {
     var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var resultCaption by remember { mutableStateOf<String?>(null) }
     var state by remember { mutableStateOf<ImageStudioState>(ImageStudioState.Idle) }
+    var showQuotaDetails by remember { mutableStateOf(false) }
+    val liveQuota = rememberLiveQuota()
+    val pal = settingsPalette()
 
     val activePreview = resultBitmap ?: sourceBitmap
     val isEditMode = sourceBitmap != null
@@ -198,11 +205,16 @@ fun ImageStudioScreen(nav: NavController) {
                     }
                 }
                 Spacer(Modifier.weight(1f))
+                LiveQuotaPill(liveQuota, pal) { showQuotaDetails = !showQuotaDetails }
                 if (sourceBitmap != null) {
                     TextButton(onClick = { sourceBitmap = null; resultBitmap = null; resultCaption = null }) {
-                        Text("Clear photo")
+                        Text("Clear")
                     }
                 }
+            }
+
+            AnimatedVisibility(visible = showQuotaDetails) {
+                LiveQuotaDetailsCard(liveQuota, pal, ctx)
             }
 
             // Image preview canvas

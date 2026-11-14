@@ -532,7 +532,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         val tone = prefs.str("aiTone").ifBlank { "natural" }
         val curLang = lang
         aiAutoJob = scope.launch {
-            delay(750L)
+            delay(1_200L)
             val currentTail = currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
             if (currentTail != snapshot) return@launch
             val prediction = runCatching { GeminiClient.autoComplete(fullBefore, tone, curLang) }.getOrNull()
@@ -779,7 +779,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         openPanel(Panel.AI)
         aiPanelJob?.cancel()
         aiResult = if (!GeminiClient.isConfigured()) {
-            AiResult(message = "Add your GEMINI_API_KEY in the AI Studio Secrets panel to enable Gemini AI.")
+            AiResult(message = "GEMINI_API_KEY is not set. Add it in AI Studio Secrets or GitHub Actions Secrets to enable Gemini AI.")
         } else null
     }
 

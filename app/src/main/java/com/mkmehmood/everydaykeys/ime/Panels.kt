@@ -825,7 +825,10 @@ internal fun RowScope.AiCompletionBar(svc: EveryDayKeysService, c: KbColors, com
 /** Smart sentence completion, text transformation, and Text-to-Prompt panel powered by Gemini. */
 @Composable
 internal fun AiPanel(svc: EveryDayKeysService, c: KbColors) {
+    val ctx = LocalContext.current
     val res = svc.aiResult
+    val liveQuota = rememberLiveQuota()
+    var showQuota by remember { mutableStateOf(false) }
     val quickPrompts = remember {
         listOf(
             "Reply politely" to "Write a polite, natural reply to this message.",
@@ -839,6 +842,7 @@ internal fun AiPanel(svc: EveryDayKeysService, c: KbColors) {
     ) {
         if (!svc.searching) {
             PanelHeader(c, "Gemini AI", "Back to keyboard", { svc.closePanel() }) {
+                LiveQuotaPill(liveQuota, c.palette()) { svc.feedback(); showQuota = !showQuota }
                 IconTap(R.drawable.ic_settings, "Smart typing and AI settings", c, c.sub) { svc.openSettings() }
             }
         }
@@ -868,20 +872,25 @@ internal fun AiPanel(svc: EveryDayKeysService, c: KbColors) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             itemsIndexed(GeminiClient.SmartAction.entries) { _, act ->
                 PanelChip(c, act.label, false, "Smart ${act.label}") {
-                    svc.feedback(); svc.runAiSmart(act)
+                    svc.feedback(); showQuota = false; svc.runAiSmart(act)
                 }
             }
             itemsIndexed(quickPrompts) { _, (label, prompt) ->
                 PanelChip(c, label, false, label) {
-                    svc.feedback(); svc.query = label; svc.runAiPrompt(prompt)
+                    svc.feedback(); showQuota = false; svc.query = label; svc.runAiPrompt(prompt)
                 }
             }
         }
         // Result / loading / idle area (collapsed while typing prompt so keys remain visible)
         if (!svc.searching) {
-            PanelGroup(c, Modifier.weight(1f)) {
-                when {
-                    res == null -> Column(
+            if (showQuota) {
+                Box(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    LiveQuotaDetailsCard(liveQuota, c.palette(), ctx, compact = true)
+                }
+            } else {
+                PanelGroup(c, Modifier.weight(1f)) {
+                    when {
+                        res == null -> Column(
                         Modifier.fillMaxSize().padding(14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -953,4 +962,5 @@ internal fun AiPanel(svc: EveryDayKeysService, c: KbColors) {
             }
         }
     }
+}
 }
