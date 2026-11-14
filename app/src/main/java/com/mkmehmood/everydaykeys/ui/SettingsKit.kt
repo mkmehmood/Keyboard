@@ -77,8 +77,19 @@ internal fun SettingsScaffold(
                     if (showBack) {
                         IconButton(
                             onClick = onBack,
-                            modifier = Modifier.minimumInteractiveComponentSize().testTag("nav_back_button")
-                        ) { Ic(R.drawable.ic_back, "Back") }
+                            modifier = Modifier.padding(start = 4.dp).minimumInteractiveComponentSize().testTag("nav_back_button")
+                        ) {
+                            Surface(
+                                Modifier.size(38.dp),
+                                shape = CircleShape,
+                                color = cs.surfaceContainerHigh,
+                                contentColor = cs.onSurface
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Ic(R.drawable.ic_back, "Back", size = 20.dp)
+                                }
+                            }
+                        }
                     }
                 },
                 scrollBehavior = behavior,
@@ -141,6 +152,7 @@ internal fun SegmentedItemCard(
     val cs = MaterialTheme.colorScheme
     val container by animateColorAsState(
         if (selected) cs.secondaryContainer else cs.surfaceContainerLow,
+        animationSpec = ExpressiveMotion.effectsDefault(),
         label = "segmentedContainer"
     )
     Surface(
@@ -253,16 +265,22 @@ internal fun PreviewField(modifier: Modifier = Modifier) {
 @Composable
 internal fun PreviewBar() {
     val cs = MaterialTheme.colorScheme
-    Surface(
-        Modifier.fillMaxWidth(),
-        color = cs.surfaceContainer,
-        tonalElevation = 3.dp
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-            HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f))
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-                PreviewField(Modifier.widthIn(max = 680.dp))
-            }
+        Surface(
+            Modifier.widthIn(max = 680.dp).fillMaxWidth(),
+            shape = CircleShape,
+            color = cs.surfaceContainerHigh,
+            tonalElevation = 4.dp,
+            shadowElevation = 6.dp,
+            border = BorderStroke(0.5.dp, cs.outlineVariant.copy(alpha = 0.55f))
+        ) {
+            PreviewField(Modifier.fillMaxWidth())
         }
     }
 }

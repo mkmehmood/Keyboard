@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -121,10 +122,11 @@ fun BackgroundScreen(nav: NavController, onBack: () -> Unit = { nav.popBackStack
 
     SettingsScaffold("Background image", onBack = onBack, showPreviewBar = showPreviewBar) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            val frameShape = RoundedCornerShape(28.dp)
             Box(
-                Modifier.fillMaxWidth().aspectRatio(aspect).clip(CardShape)
+                Modifier.fillMaxWidth().aspectRatio(aspect).clip(frameShape)
                     .background(cs.surfaceContainerHighest)
-                    .border(BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.65f)), CardShape)
+                    .border(BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.65f)), frameShape)
                     .onSizeChanged { frame = it }
                     .pointerInput(src) {
                         detectTransformGestures { _, pan, gz, _ ->
@@ -201,14 +203,11 @@ fun BackgroundScreen(nav: NavController, onBack: () -> Unit = { nav.popBackStack
             ) { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             Spacer(Modifier.height(16.dp))
 
-            GroupCard {
-                LabeledSlider("Zoom", "%.1fx".format(zoom), zoom, 1f..5f) { zoom = it; clamp() }
-                RowDivider()
-                LabeledSlider("Dimming", "${dim.toInt()}%", dim, 0f..90f) { dim = it }
-                RowDivider()
-                LabeledSlider("Blur (Android 12+)", "${blur.toInt()} dp", blur, 0f..25f) { blur = it }
-                RowDivider()
-                LabeledSlider("Key opacity", "${keyAlpha.toInt()}%", keyAlpha, 30f..100f) { keyAlpha = it }
+            SegmentedColumn {
+                SegmentedItemCard(0, 4) { LabeledSlider("Zoom", "%.1fx".format(zoom), zoom, 1f..5f) { zoom = it; clamp() } }
+                SegmentedItemCard(1, 4) { LabeledSlider("Dimming", "${dim.toInt()}%", dim, 0f..90f) { dim = it } }
+                SegmentedItemCard(2, 4) { LabeledSlider("Blur (Android 12+)", "${blur.toInt()} dp", blur, 0f..25f) { blur = it } }
+                SegmentedItemCard(3, 4) { LabeledSlider("Key opacity", "${keyAlpha.toInt()}%", keyAlpha, 30f..100f) { keyAlpha = it } }
             }
 
             Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

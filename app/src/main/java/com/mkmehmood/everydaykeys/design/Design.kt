@@ -1,17 +1,30 @@
 package com.mkmehmood.everydaykeys.design
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -21,15 +34,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mkmehmood.everydaykeys.R
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /*
- * The shared Material 3 design system for Everyday Keys.
+ * The shared Material 3 Expressive design system for Everyday Keys.
  *
- * The Settings screens and everything the keyboard shows above the keys (clipboard, snippets, emoji, converter,
- * cursor keys, quick settings, paste progress, action notices) use the pieces in this file, so a card, tonal icon,
- * button, switch or note looks and measures the same wherever it appears. Only the colours differ:
- * Settings feeds in [settingsPalette] (the Material 3 colour scheme), the keyboard feeds in a palette built from the
- * same Material 3 roles (dynamic colour or the chosen accent) in [com.mkmehmood.everydaykeys.ime.KbColors].
+ * Aligns the Settings workspace and IME surfaces with Android 16 Material 3 Expressive:
+ * spatial bouncy springs vs. smooth effects transitions, soft segmented container seams,
+ * expressive scalloped emblem geometry, and tonal surface layering.
  */
 
 /** Material 3 Expressive motion & state layer tokens. */
@@ -38,6 +52,21 @@ object StateLayer { const val Pressed = 0.10f }
 object ExpressiveMotion {
     const val EmphasizedDurationMs = 300
     const val FastDurationMs = 150
+
+    fun <T> spatialFast() = spring<T>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMedium
+    )
+
+    fun <T> spatialDefault() = spring<T>(
+        dampingRatio = Spring.DampingRatioLowBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+
+    fun <T> effectsDefault() = spring<T>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMedium
+    )
 }
 
 /** Material 3 Expressive shape scale and sizes. */
@@ -59,6 +88,23 @@ object Dim {
         val top = if (index == 0) 22.dp else 6.dp
         val bottom = if (index == count - 1) 22.dp else 6.dp
         return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+    }
+
+    /** Soft multi-lobed M3 Expressive badge / flower shape. */
+    fun scallop(lobes: Int = 8, depth: Float = 0.10f): Shape = GenericShape { size, _ ->
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val baseR = minOf(cx, cy) * (1f - depth)
+        val amp = minOf(cx, cy) * depth
+        val steps = lobes * 16
+        for (i in 0..steps) {
+            val theta = (i.toFloat() / steps) * (2f * PI.toFloat())
+            val r = baseR + amp * cos(lobes * theta)
+            val x = cx + r * cos(theta)
+            val y = cy + r * sin(theta)
+            if (i == 0) moveTo(x, y) else lineTo(x, y)
+        }
+        close()
     }
 }
 
@@ -108,7 +154,7 @@ fun DsTile(p: Palette, icon: Int, size: Dp = Dim.TileSize, filled: Boolean = fal
 @Composable
 fun DsGroup(p: Palette, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier.fillMaxWidth().animateContentSize(),
+        modifier.fillMaxWidth().animateContentSize(ExpressiveMotion.spatialDefault()),
         shape = Dim.Card,
         colors = CardDefaults.cardColors(containerColor = p.surface, contentColor = p.text),
         border = BorderStroke(0.5.dp, p.hairline.copy(alpha = 0.45f)),
@@ -175,12 +221,21 @@ fun dsSwitchColors(p: Palette): SwitchColors = SwitchDefaults.colors(
     uncheckedThumbColor = p.off, uncheckedTrackColor = p.trackOff, uncheckedBorderColor = p.off, uncheckedIconColor = p.trackOff
 )
 
-/** Material 3 switch with the check icon in the thumb when on. */
+/** Material 3 Expressive switch with animated thumb icon morphing. */
 @Composable
 fun DsSwitch(p: Palette, checked: Boolean, onChange: ((Boolean) -> Unit)? = null) {
     Switch(
         checked, onChange, colors = dsSwitchColors(p),
-        thumbContent = if (checked) { { Icon(painterResource(R.drawable.ic_check), null, Modifier.size(SwitchDefaults.IconSize)) } } else null
+        thumbContent = {
+            AnimatedContent(
+                targetState = checked,
+                transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.6f)) togetherWith fadeOut() },
+                label = "switchThumbIcon"
+            ) { on ->
+                if (on) Icon(painterResource(R.drawable.ic_check), null, Modifier.size(SwitchDefaults.IconSize))
+                else Spacer(Modifier.size(SwitchDefaults.IconSize))
+            }
+        }
     )
 }
 
@@ -198,6 +253,60 @@ fun DsToggleRow(p: Palette, icon: Int?, title: String, sub: String?, checked: Bo
             if (sub != null) Text(sub, color = p.sub, style = MaterialTheme.typography.bodyMedium)
         }
         DsSwitch(p, checked)
+    }
+}
+
+/** Android 16 Material 3 Expressive linear progress bar with animated progress and end stop-indicator dot. */
+@Composable
+fun DsExpressiveProgress(
+    progress: Float,
+    color: Color,
+    trackColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val anim by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = ExpressiveMotion.spatialDefault(),
+        label = "expressiveProgress"
+    )
+    Box(
+        modifier.fillMaxWidth().height(8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (anim > 0.01f) {
+                Box(
+                    Modifier
+                        .weight(anim.coerceAtLeast(0.02f))
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(color)
+                )
+            }
+            val rem = (1f - anim).coerceAtLeast(0f)
+            if (rem > 0.01f) {
+                Box(
+                    Modifier
+                        .weight(rem)
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(trackColor),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Box(
+                        Modifier
+                            .padding(end = 2.dp)
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                }
+            }
+        }
     }
 }
 

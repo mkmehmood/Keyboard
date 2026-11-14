@@ -3,6 +3,7 @@ package com.mkmehmood.everydaykeys.ime
 import android.os.Build
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -10,6 +11,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.core.view.WindowCompat
+import com.mkmehmood.everydaykeys.design.ExpressiveMotion
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
@@ -137,7 +139,7 @@ class KbColors(
     val outline: Color, val outlineVariant: Color, val scrim: Color, val surfaceHighest: Color
 ) {
     companion object {
-        fun of(dark: Boolean, accentName: String, style: String = "current", cs: ColorScheme): KbColors {
+        fun of(dark: Boolean, cs: ColorScheme): KbColors {
             return KbColors(
                 bg = cs.surfaceContainer,
                 key = if (dark) cs.surfaceContainerHighest else cs.surfaceContainerLowest,
@@ -171,7 +173,7 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
     val dark = when (p.str("theme")) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val scheme = remember(dark, p.bool("dynamicColor"), p.str("accent")) { m3Scheme(ctx, dark, p.bool("dynamicColor"), p.str("accent")) }
-    val base = remember(scheme, p.str("layoutStyle")) { KbColors.of(dark, p.str("accent"), p.str("layoutStyle"), scheme) }
+    val base = remember(scheme, p.str("layoutStyle")) { KbColors.of(dark, scheme) }
     val bmp = remember(p.str("bgOn"), p.str("bgVersion")) { if (p.bool("bgOn")) KbBackground.load(ctx) else null }
     val c = if (bmp == null) base else {
         val a = p.int("bgKeyAlpha") / 100f
@@ -195,7 +197,6 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
     }
     val oh = p.str("oneHanded")
     val align = when (oh) { "left" -> Alignment.BottomStart; "right" -> Alignment.BottomEnd; else -> Alignment.BottomCenter }
-    val h = 52.dp
     var rootW by remember { mutableStateOf(0) }
     Box(
         Modifier.fillMaxWidth()
@@ -230,12 +231,12 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
                     Box(
                         Modifier.fillMaxWidth().heightIn(min = minH).then(if (letters) Modifier.onSizeChanged { svc.keysHeightPx = it.height } else Modifier),
                         contentAlignment = Alignment.Center
-                    ) { Keys(svc, c, h) }
+                    ) { Keys(svc, c) }
                 }
-                Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
-                Panel.SNIPPETS -> { SnippetPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
-                Panel.EMOJI -> { EmojiPanel(svc, c); if (svc.searching) Keys(svc, c, h) }
-                Panel.CURSOR -> CursorPanel(svc, c, h)
+                Panel.CLIP -> { ClipPanel(svc, c); if (svc.searching) Keys(svc, c) }
+                Panel.SNIPPETS -> { SnippetPanel(svc, c); if (svc.searching) Keys(svc, c) }
+                Panel.EMOJI -> { EmojiPanel(svc, c); if (svc.searching) Keys(svc, c) }
+                Panel.CURSOR -> CursorPanel(svc, c)
                 Panel.CONVERT -> ConvertPanel(svc, c)
                 Panel.QUICK -> QuickPanel(svc, c)
             }
@@ -245,11 +246,11 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
 }
 
 @Composable
-private fun Keys(svc: EveryDayKeysService, c: KbColors, h: Dp) {
+private fun Keys(svc: EveryDayKeysService, c: KbColors) {
     when (svc.mode) {
-        Mode.LETTERS -> LettersView(svc, c, h)
-        Mode.NUMPAD -> NumpadView(svc, c, h)
-        Mode.SYM1, Mode.SYM2, Mode.SYM3, Mode.SYM4 -> SymbolsView(svc, c, h)
+        Mode.LETTERS -> LettersView(svc, c)
+        Mode.NUMPAD -> NumpadView(svc, c)
+        Mode.SYM1, Mode.SYM2, Mode.SYM3, Mode.SYM4 -> SymbolsView(svc, c)
     }
 }
 
@@ -275,10 +276,26 @@ fun Key(
         tone == 1 -> c.onTile
         else -> c.text
     }
-    val shape = shapeOverride ?: keyShape(p)
+    val baseShape = shapeOverride ?: keyShape(p)
+    val morphBaseDp = when {
+        shapeOverride != null -> null
+        layoutStyle(p) == "raised" -> 10.dp
+        layoutStyle(p) == "flat" -> 14.dp
+        layoutStyle(p) == "pro" -> 20.dp
+        p.str("keyShape") == "slight" -> 6.dp
+        p.str("keyShape") == "soft" -> 20.dp
+        p.str("keyShape") == "square" || p.str("keyShape") == "round" -> null
+        else -> 14.dp
+    }
+    val animCorner by animateDpAsState(
+        targetValue = if (pressed && morphBaseDp != null) 22.dp else (morphBaseDp ?: 14.dp),
+        animationSpec = ExpressiveMotion.spatialFast(),
+        label = "keyMorphCorner"
+    )
+    val shape = if (morphBaseDp != null) RoundedCornerShape(animCorner) else baseShape
     val pressScale by animateFloatAsState(
         targetValue = if (pressed) 0.91f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = ExpressiveMotion.spatialFast(),
         label = "keyPressScale"
     )
     // Material 3: outlined keys have no container; the pressed state is a 10% state layer of the content colour
@@ -287,13 +304,14 @@ fun Key(
         pressed -> fg.copy(alpha = StateLayer.Pressed).compositeOver(base)
         else -> base
     }
-    // elevated key style: Material 3 level-1 elevation
+    // elevated key style: Material 3 level-1 elevation + subtle tonal rim
     var m = modifier
         .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
         .then(if (style == "raised") Modifier.shadow(1.5.dp, shape) else Modifier)
         .clip(shape)
         .background(fill)
     if (outline) m = m.border(1.5.dp, if (tone == 2 || active) c.accent else c.outline, shape)
+    else if (c.bg != Color.Transparent) m = m.border(0.5.dp, c.outlineVariant.copy(alpha = 0.25f), shape)
     m = m
         .semantics { contentDescription = desc; role = Role.Button; onClick(label = desc) { tap(); true } }
         .pointerInput(Unit) {
@@ -370,11 +388,30 @@ private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) 
     val shape = if (layoutStyle(svc.prefs) == "flat" || layoutStyle(svc.prefs) == "pro") RoundedCornerShape(50) else keyShape(svc.prefs)
     val outline = effStyle(svc.prefs) == "outline"
     val langLabel = Layouts.langNames[svc.lang] ?: svc.lang.uppercase()
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = ExpressiveMotion.spatialFast(),
+        label = "spaceScale"
+    )
     Box(
-        modifier.clip(shape).background(if (outline) Color.Transparent else c.key)
-            .then(if (outline) Modifier.border(1.5.dp, c.outline, shape) else Modifier)
+        modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(shape)
+            .background(if (outline) Color.Transparent else c.key)
+            .then(if (outline) Modifier.border(1.5.dp, c.outline, shape) else Modifier.border(0.5.dp, c.outlineVariant.copy(alpha = 0.25f), shape))
             .semantics { contentDescription = "Space, $langLabel. Swipe left or right to move the cursor."; role = Role.Button; onClick { svc.onChar(" "); true } }
-            .pointerInput(Unit) { detectTapGestures(onPress = { svc.feedback() }, onTap = { svc.onChar(" ") }) }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        svc.feedback()
+                        tryAwaitRelease()
+                        pressed = false
+                    },
+                    onTap = { svc.onChar(" ") }
+                )
+            }
             .pointerInput(Unit) {
                 var acc = 0f
                 detectHorizontalDragGestures(onDragStart = { acc = 0f }) { _, d ->
@@ -388,7 +425,7 @@ private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) 
     ) {
         Text(
             langLabel,
-            color = c.sub.copy(alpha = 0.85f),
+            color = c.sub.copy(alpha = 0.88f),
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -423,7 +460,7 @@ private fun kbGrid(maxWidth: Dp, p: Prefs): Grid {
 }
 
 @Composable
-private fun LettersView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
+private fun LettersView(svc: EveryDayKeysService, c: KbColors) {
     val rows = Layouts.letters[svc.lang] ?: Layouts.letters.getValue("en")
     val up = svc.shift != Shift.OFF
     val hintsOn = svc.prefs.bool("keyHints") || layoutStyle(svc.prefs) == "pro"
@@ -477,7 +514,7 @@ private fun LettersView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 }
 
 @Composable
-private fun NumpadView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
+private fun NumpadView(svc: EveryDayKeysService, c: KbColors) {
     val p = svc.prefs
     val kind = p.str("numpadLayout").let {
         if (it == "auto" || it.isEmpty()) when (layoutStyle(p)) { "raised" -> "top"; "flat" -> "left"; "pro" -> "circles"; else -> "classic" } else it
@@ -630,13 +667,12 @@ private fun NumpadClassic(svc: EveryDayKeysService, c: KbColors, grid: Grid) {
 }
 
 @Composable
-private fun SymbolsView(svc: EveryDayKeysService, c: KbColors, h: Dp) {
+private fun SymbolsView(svc: EveryDayKeysService, c: KbColors) {
     val symModes = listOf(Mode.SYM1, Mode.SYM2, Mode.SYM3, Mode.SYM4)
     val page = symModes.indexOf(svc.mode).coerceAtLeast(0)
     // with the number row on, symbols get the same digit row as the letters, so they are five rows tall like the letters
     val numRow = svc.prefs.bool("numberRow")
     val rows = if (numRow) Layouts.symPagesWithNumberRow[page] else Layouts.symPages[page]
-    val gap = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // symbols fill the whole keyboard: the full width, and the height of the letter keys plus the strip the other screens give up
         val g0 = kbGrid(maxWidth, svc.prefs)
@@ -711,8 +747,14 @@ private fun ToolboxToggle(svc: EveryDayKeysService, c: KbColors, open: Boolean) 
 private fun RowScope.ToolIcons(svc: EveryDayKeysService, c: KbColors) {
     val ids = if (svc.hasSelection) listOf("selectall", "copy", "cut", "paste", "undo", "redo")
     else svc.prefs.str("toolbarItems").split(",").filter { it.isNotBlank() }
-    Row(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-        ids.forEach { id -> tool(id)?.let { t -> ToolTile(t.icon, t.desc, c, false, Modifier.weight(1f)) { svc.feedback(); t.run(svc) } } }
+    Surface(
+        Modifier.weight(1f).height(40.dp).padding(start = 4.dp, end = 2.dp),
+        shape = CircleShape,
+        color = c.panel.copy(alpha = 0.65f)
+    ) {
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            ids.forEach { id -> tool(id)?.let { t -> ToolTile(t.icon, t.desc, c, false, Modifier.weight(1f)) { svc.feedback(); t.run(svc) } } }
+        }
     }
 }
 
@@ -737,7 +779,7 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val noWords = items.isEmpty() && pending == null
     val showTools = hasToolbar && alts == null && (svc.toolsOpen || noWords || svc.hasSelection)
     if (!hasToolbar && noWords) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
-    Row(Modifier.fillMaxWidth().height(StripH).animateContentSize(), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(StripH).animateContentSize(ExpressiveMotion.spatialFast()), verticalAlignment = Alignment.CenterVertically) {
         if (hasToolbar) ToolboxToggle(svc, c, open = showTools)
         if (showTools) { ToolIcons(svc, c); return@Row }
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
@@ -752,8 +794,9 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
                     onClick = { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) },
                     modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
                     shape = CircleShape,
-                    color = if (isPrimary) c.accentContainer.copy(alpha = 0.72f) else c.panel.copy(alpha = 0.72f),
-                    contentColor = if (isPrimary) c.onAccentContainer else c.text
+                    color = if (isPrimary) c.accentContainer.copy(alpha = 0.78f) else c.panel.copy(alpha = 0.72f),
+                    contentColor = if (isPrimary) c.onAccentContainer else c.text,
+                    border = if (isPrimary) BorderStroke(1.dp, c.accent.copy(alpha = 0.30f)) else null
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(

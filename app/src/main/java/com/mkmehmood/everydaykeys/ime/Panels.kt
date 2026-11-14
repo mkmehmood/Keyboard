@@ -144,7 +144,7 @@ internal fun PanelHeader(c: KbColors, title: String, backDesc: String, onBack: (
 internal fun PanelGroup(c: KbColors, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) = DsGroup(c.palette(), modifier, content)
 
 @Composable
-internal fun PanelDivider(c: KbColors) = Spacer(Modifier.height(6.dp))
+internal fun PanelDivider() = Spacer(Modifier.height(6.dp))
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -174,13 +174,15 @@ internal fun PanelRow(
 @Composable
 internal fun PanelSearch(svc: EveryDayKeysService, c: KbColors, hint: String, modifier: Modifier, flat: Boolean = false, trailing: @Composable RowScope.() -> Unit = {}) {
     val on = svc.searching
-    // a pill-shaped Material 3 search surface; tapping it sends the keyboard's letters to the search text
+    val borderWidth by animateDpAsState(if (on) 2.dp else 1.dp, ExpressiveMotion.spatialFast(), label = "searchBorderW")
+    val borderColor by animateColorAsState(if (on) c.accent else c.outlineVariant.copy(alpha = 0.55f), ExpressiveMotion.effectsDefault(), label = "searchBorderC")
+    // a pill-shaped Material 3 Expressive search surface; tapping it sends the keyboard's letters to the search text
     Surface(
         onClick = { svc.searching = true }, modifier = modifier.height(if (flat) 40.dp else 44.dp), shape = CircleShape, color = c.key,
-        border = BorderStroke(if (on) 2.dp else 1.dp, if (on) c.accent else c.outlineVariant.copy(alpha = 0.55f))
+        border = BorderStroke(borderWidth, borderColor)
     ) {
         Row(Modifier.padding(start = 14.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(R.drawable.ic_search), null, tint = c.sub, modifier = Modifier.size(20.dp))
+            Icon(painterResource(R.drawable.ic_search), null, tint = if (on) c.accent else c.sub, modifier = Modifier.size(20.dp))
             Text(
                 if (svc.query.isEmpty()) hint else svc.query, color = if (svc.query.isEmpty()) c.sub else c.text,
                 style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
@@ -290,8 +292,8 @@ internal fun ProgressCard(svc: EveryDayKeysService, c: KbColors) {
             )
             IconTap(R.drawable.ic_close, "Cancel paste", c) { svc.cancelPaste() }
         }
-        LinearProgressIndicator(
-            progress = { pr }, color = c.accent, trackColor = c.accentContainer,
+        DsExpressiveProgress(
+            progress = pr, color = c.accent, trackColor = c.accentContainer,
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
         )
       }
@@ -329,7 +331,6 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
     // the "Clear all?" button disarms itself after a few seconds so a stray tap later does nothing
     LaunchedEffect(confirmClear) { if (confirmClear) { delay(3000); confirmClear = false } }
     // the preview grows to the height of the key area it replaces, so the keyboard never gets taller than normal
-    val keysH = with(androidx.compose.ui.platform.LocalDensity.current) { svc.keysHeightPx.toDp() }
     val previewH = panelHeight(svc)
     Column(
         Modifier.fillMaxWidth().height(if (preview != null) previewH else if (svc.searching) 150.dp else panelHeight(svc)).padding(2.dp),
@@ -488,7 +489,7 @@ internal fun SnippetPanel(svc: EveryDayKeysService, c: KbColors) {
                 list.isEmpty() -> PanelEmpty(c, R.drawable.ic_search, "No snippets match")
                 else -> LazyColumn(Modifier.fillMaxSize().padding(6.dp)) {
                     itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
-                        if (i > 0) PanelDivider(c)
+                        if (i > 0) PanelDivider()
                         PanelRow(c, null, s.title, s.body.replace(Regex("\\s+"), " ").take(60), onClick = { svc.feedback(); svc.commitText(s.body); svc.closePanel() }) {
                             if (s.shortcut.isNotBlank()) Surface(
                                 shape = Dim.Badge, color = c.accentContainer, contentColor = c.onAccentContainer, modifier = Modifier.padding(end = 8.dp)
@@ -553,13 +554,15 @@ internal fun EmojiPanel(svc: EveryDayKeysService, c: KbColors) {
     }
 }
 
-/** A bottom bar tab: the icon with a Material 3 active pill indicator when selected. */
+/** A bottom bar tab: the icon with an animated Material 3 Expressive active pill indicator when selected. */
 @Composable
 private fun EmojiTab(c: KbColors, selected: Boolean, desc: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+    val pillW by animateDpAsState(if (selected) 38.dp else 0.dp, ExpressiveMotion.spatialFast(), label = "emojiTabW")
+    val pillColor by animateColorAsState(if (selected) c.tile else Color.Transparent, ExpressiveMotion.effectsDefault(), label = "emojiTabC")
     Surface(onClick = onClick, color = Color.Transparent, modifier = Modifier.width(46.dp).height(44.dp).semantics { contentDescription = desc }) {
         Box(contentAlignment = Alignment.Center) {
-            if (selected) Box(
-                Modifier.width(38.dp).height(30.dp).clip(CircleShape).background(c.tile)
+            if (pillW > 1.dp) Box(
+                Modifier.width(pillW).height(30.dp).clip(CircleShape).background(pillColor)
             )
             content()
         }
@@ -582,7 +585,7 @@ internal fun ConvertPanel(svc: EveryDayKeysService, c: KbColors) {
         }
         PanelGroup(c) {
             UnitRow("From", cat.units, svc.convFrom, c) { svc.convFrom = it }
-            PanelDivider(c)
+            PanelDivider()
             UnitRow("To", cat.units, svc.convTo, c) { svc.convTo = it }
         }
         Surface(
@@ -618,7 +621,7 @@ private fun UnitRow(label: String, units: List<UnitDef>, selected: Int, c: KbCol
 
 /** Two plain cards, no title: the arrows with Home and End on the left, select, copy, cut, paste, undo and redo on the right. */
 @Composable
-internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
+internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors) {
     val gap = Arrangement.spacedBy(5.dp)
     val key = Modifier.fillMaxHeight()
     Column(Modifier.fillMaxWidth().height(panelHeight(svc)).padding(2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

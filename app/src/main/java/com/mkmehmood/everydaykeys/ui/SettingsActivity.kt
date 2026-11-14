@@ -8,9 +8,10 @@ import android.os.Build
 import android.provider.Settings
 import android.text.format.Formatter
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,8 +21,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -77,12 +84,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.mkmehmood.everydaykeys.R
 import com.mkmehmood.everydaykeys.data.*
 import com.mkmehmood.everydaykeys.design.*
 import com.mkmehmood.everydaykeys.ime.effStyle
 import com.mkmehmood.everydaykeys.ime.keyShape
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
@@ -139,12 +148,50 @@ fun AppTheme(content: @Composable () -> Unit) = AppColors {
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
-    // Material 3 Expressive shared-axis X + emphasized easing
     val ease = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth >= 840.dp) {
-            AdaptiveSettingsWorkspace(nav)
-        } else {
+    val backEntry by nav.currentBackStackEntryAsState()
+    val currentRoute = backEntry?.destination?.route ?: "home"
+    val canPop = currentRoute != "home"
+
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    var backEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
+    val animBackProgress by animateFloatAsState(
+        targetValue = backProgress,
+        animationSpec = if (backProgress == 0f) ExpressiveMotion.spatialFast() else tween(0),
+        label = "predictiveBackProgress"
+    )
+
+    PredictiveBackHandler(enabled = canPop) { progressFlow ->
+        try {
+            progressFlow.collect { event ->
+                backEdge = event.swipeEdge
+                backProgress = 1f - (1f - event.progress) * (1f - event.progress)
+            }
+            backProgress = 0f
+            nav.popBackStack()
+        } catch (_: CancellationException) {
+            backProgress = 0f
+        }
+    }
+
+    @Composable
+    fun PhoneAndMediumNavHost(modifier: Modifier = Modifier) {
+        val scale = 1f - 0.10f * animBackProgress
+        val corner = (28f * animBackProgress).dp
+        val dir = if (backEdge == BackEventCompat.EDGE_LEFT) 1f else -1f
+        Box(
+            modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = dir * animBackProgress * 28.dp.toPx()
+                    if (animBackProgress > 0.001f) {
+                        shape = RoundedCornerShape(corner)
+                        clip = true
+                    }
+                }
+        ) {
             NavHost(
                 nav, "home",
                 enterTransition = {
@@ -172,6 +219,72 @@ fun AppNav() {
             }
         }
     }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        when {
+            maxWidth >= 840.dp -> AdaptiveSettingsWorkspace(nav)
+            maxWidth >= 600.dp -> {
+                Row(Modifier.fillMaxSize()) {
+                    ExpressiveNavigationRail(
+                        activeId = when {
+                            currentRoute == "home" -> "home"
+                            currentRoute == "snippets" -> "snippets"
+                            currentRoute == "background" -> "background"
+                            currentRoute == "dictionary" -> "dictionary"
+                            else -> backEntry?.arguments?.getString("id") ?: "home"
+                        },
+                        onSelect = { target ->
+                            if (target == "home") {
+                                nav.popBackStack("home", inclusive = false)
+                            } else {
+                                val dest = if (target in setOf("snippets", "background", "dictionary")) target else "s/$target"
+                                nav.navigate(dest) { launchSingleTop = true }
+                            }
+                        }
+                    )
+                    PhoneAndMediumNavHost(Modifier.weight(1f))
+                }
+            }
+            else -> PhoneAndMediumNavHost()
+        }
+    }
+}
+
+@Composable
+private fun ExpressiveNavigationRail(activeId: String, onSelect: (String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val railItems = remember {
+        listOf(
+            Triple("home", "Overview", R.drawable.ic_keyboard),
+            Triple("appearance", "Theme", R.drawable.ic_sun),
+            Triple("smart", "Typing", R.drawable.ic_sparkle),
+            Triple("snippets", "Snippets", R.drawable.ic_snippet),
+            Triple("privacy", "Privacy", R.drawable.ic_lock)
+        )
+    }
+    NavigationRail(
+        containerColor = cs.surfaceContainerLow,
+        contentColor = cs.onSurface,
+        windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)
+    ) {
+        Spacer(Modifier.height(12.dp))
+        railItems.forEach { (id, label, icon) ->
+            val selected = activeId == id
+            NavigationRailItem(
+                selected = selected,
+                onClick = { onSelect(id) },
+                icon = { Ic(icon, label, size = 22.dp) },
+                label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = cs.onSecondaryContainer,
+                    selectedTextColor = cs.primary,
+                    indicatorColor = cs.secondaryContainer,
+                    unselectedIconColor = cs.onSurfaceVariant,
+                    unselectedTextColor = cs.onSurfaceVariant
+                )
+            )
+        }
+    }
 }
 
 @Composable
@@ -179,53 +292,91 @@ private fun AdaptiveSettingsWorkspace(nav: NavController) {
     val cs = MaterialTheme.colorScheme
     var selectedSectionId by remember { mutableStateOf("lang") }
     var detailSubRoute by remember { mutableStateOf<String?>(null) }
-    BackHandler(enabled = detailSubRoute != null) { detailSubRoute = null }
 
-    Column(Modifier.fillMaxSize().imePadding()) {
-        Row(
-            Modifier.weight(1f).fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(Modifier.width(380.dp).fillMaxHeight()) {
-                HomeScreen(
-                    nav = nav,
-                    selectedSectionId = selectedSectionId,
-                    showBack = false,
-                    showPreviewBar = false,
-                    onSelectSection = { id -> selectedSectionId = id; detailSubRoute = null }
-                )
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    var backEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
+    val animBackProgress by animateFloatAsState(
+        targetValue = backProgress,
+        animationSpec = if (backProgress == 0f) ExpressiveMotion.spatialFast() else tween(0),
+        label = "detailPredictiveBack"
+    )
+
+    PredictiveBackHandler(enabled = detailSubRoute != null) { progressFlow ->
+        try {
+            progressFlow.collect { event ->
+                backEdge = event.swipeEdge
+                backProgress = 1f - (1f - event.progress) * (1f - event.progress)
             }
-            Surface(
-                Modifier.weight(1f).fillMaxHeight(),
-                shape = RoundedCornerShape(28.dp),
-                color = cs.surfaceContainerLowest,
-                border = BorderStroke(0.5.dp, cs.outlineVariant.copy(alpha = 0.5f))
+            backProgress = 0f
+            detailSubRoute = null
+        } catch (_: CancellationException) {
+            backProgress = 0f
+        }
+    }
+
+    Row(Modifier.fillMaxSize()) {
+        ExpressiveNavigationRail(
+            activeId = detailSubRoute ?: selectedSectionId,
+            onSelect = { id ->
+                when (id) {
+                    "home" -> { detailSubRoute = null; selectedSectionId = "lang" }
+                    "snippets", "background", "dictionary" -> detailSubRoute = id
+                    else -> { detailSubRoute = null; selectedSectionId = id }
+                }
+            }
+        )
+        Column(Modifier.weight(1f).fillMaxHeight().imePadding()) {
+            Row(
+                Modifier.weight(1f).fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.End))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                AnimatedContent(
-                    targetState = detailSubRoute to selectedSectionId,
-                    transitionSpec = {
-                        fadeIn(tween(210, 60)) togetherWith fadeOut(tween(120))
+                Box(Modifier.width(340.dp).fillMaxHeight()) {
+                    HomeScreen(
+                        nav = nav,
+                        selectedSectionId = selectedSectionId,
+                        showBack = false,
+                        showPreviewBar = false,
+                        onSelectSection = { id -> selectedSectionId = id; detailSubRoute = null }
+                    )
+                }
+                val paneScale = 1f - 0.08f * animBackProgress
+                val paneDir = if (backEdge == BackEventCompat.EDGE_LEFT) 1f else -1f
+                Surface(
+                    Modifier.weight(1f).fillMaxHeight().graphicsLayer {
+                        scaleX = paneScale
+                        scaleY = paneScale
+                        translationX = paneDir * animBackProgress * 24.dp.toPx()
                     },
-                    label = "adaptiveDetailPane"
-                ) { (sub, secId) ->
-                    when (sub) {
-                        "snippets" -> SnippetsScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
-                        "background" -> BackgroundScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
-                        "dictionary" -> DictScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
-                        else -> SectionScreen(
-                            id = secId,
-                            nav = nav,
-                            showBack = false,
-                            showPreviewBar = false,
-                            onNavigateSub = { detailSubRoute = it }
-                        )
+                    shape = RoundedCornerShape((28f + 8f * animBackProgress).dp),
+                    color = cs.surfaceContainerLowest,
+                    border = BorderStroke(0.5.dp, cs.outlineVariant.copy(alpha = 0.5f))
+                ) {
+                    AnimatedContent(
+                        targetState = detailSubRoute to selectedSectionId,
+                        transitionSpec = {
+                            fadeIn(tween(210, 60)) togetherWith fadeOut(tween(120))
+                        },
+                        label = "adaptiveDetailPane"
+                    ) { (sub, secId) ->
+                        when (sub) {
+                            "snippets" -> SnippetsScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
+                            "background" -> BackgroundScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
+                            "dictionary" -> DictScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
+                            else -> SectionScreen(
+                                id = secId,
+                                nav = nav,
+                                showBack = false,
+                                showPreviewBar = false,
+                                onNavigateSub = { detailSubRoute = it }
+                            )
+                        }
                     }
                 }
             }
+            PreviewBar()
         }
-        PreviewBar()
     }
 }
 
@@ -373,7 +524,7 @@ fun HomeScreen(
     }
 }
 
-/** Expressive Material 3 hero setup status card with layered tonal gradient surface and progress bar. */
+/** Expressive Material 3 hero setup status card with scalloped rotating emblem and stop-dot progress bar. */
 @Composable
 private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
     val ok = enabled && selected
@@ -381,9 +532,17 @@ private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
     val c1 = if (ok) cs.primaryContainer else cs.secondaryContainer
     val c2 = if (ok) cs.tertiaryContainer.copy(alpha = 0.65f) else cs.primaryContainer.copy(alpha = 0.72f)
     val fg = if (ok) cs.onPrimaryContainer else cs.onSecondaryContainer
+    val emblemShape = remember { Dim.scallop(lobes = 8, depth = 0.09f) }
+    val inf = rememberInfiniteTransition(label = "emblemSpin")
+    val spin by inf.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(24000, easing = LinearEasing), RepeatMode.Restart),
+        label = "emblemAngle"
+    )
 
     Surface(
-        Modifier.fillMaxWidth().animateContentSize(),
+        Modifier.fillMaxWidth().animateContentSize(ExpressiveMotion.spatialDefault()),
         shape = RoundedCornerShape(28.dp),
         color = Color.Transparent,
         border = BorderStroke(1.dp, cs.primary.copy(alpha = if (ok) 0.18f else 0.30f))
@@ -406,28 +565,39 @@ private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        Modifier.size(54.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        color = cs.primary,
-                        contentColor = cs.onPrimary,
-                        tonalElevation = 2.dp
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Ic(if (ok) R.drawable.ic_check else R.drawable.ic_keyboard, null, cs.onPrimary, 26.dp)
-                        }
+                    Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+                        Surface(
+                            Modifier.fillMaxSize().graphicsLayer { rotationZ = if (ok) spin else 0f },
+                            shape = emblemShape,
+                            color = cs.primary,
+                            tonalElevation = 2.dp
+                        ) {}
+                        Ic(if (ok) R.drawable.ic_check else R.drawable.ic_keyboard, null, cs.onPrimary, 24.dp)
                     }
                     Column(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Surface(
-                            shape = CircleShape,
-                            color = cs.surface.copy(alpha = 0.72f),
-                            contentColor = cs.primary
-                        ) {
-                            Text(
-                                if (ok) "Active" else if (!enabled) "Step 1 of 2" else "Step 2 of 2",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                            )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = CircleShape,
+                                color = cs.surface.copy(alpha = 0.75f),
+                                contentColor = cs.primary
+                            ) {
+                                Text(
+                                    if (ok) "Active" else if (!enabled) "Step 1 of 2" else "Step 2 of 2",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                )
+                            }
+                            Surface(
+                                shape = CircleShape,
+                                color = cs.surface.copy(alpha = 0.55f),
+                                contentColor = fg
+                            ) {
+                                Text(
+                                    "On-device",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                         Text(
                             if (ok) "Everyday Keys is ready" else if (!enabled) "Enable Everyday Keys" else "Switch to Everyday Keys",
@@ -451,11 +621,10 @@ private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
                     }
                 }
                 if (!ok) {
-                    LinearProgressIndicator(
-                        progress = { if (!enabled) 0.33f else 0.72f },
+                    DsExpressiveProgress(
+                        progress = if (!enabled) 0.35f else 0.75f,
                         color = cs.primary,
-                        trackColor = cs.surface.copy(alpha = 0.55f),
-                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+                        trackColor = cs.surface.copy(alpha = 0.55f)
                     )
                 }
             }
@@ -539,6 +708,23 @@ private fun LiveKeyboardPreview(prefs: Prefs) {
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonoFontFamily),
                     modifier = Modifier.align(Alignment.TopEnd).padding(end = 5.dp, top = 2.dp)
                 )
+            }
+            if (held && tone == 0 && label != null && label.length == 1 && prefs.bool("keyPreview")) {
+                androidx.compose.ui.window.Popup(alignment = Alignment.TopCenter, offset = androidx.compose.ui.unit.IntOffset(0, -110)) {
+                    Surface(
+                        Modifier.size(38.dp, 44.dp),
+                        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+                        color = cs.surfaceContainerHighest,
+                        contentColor = cs.onSurface,
+                        tonalElevation = 6.dp,
+                        shadowElevation = 6.dp,
+                        border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.28f))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(label, style = MaterialTheme.typography.titleLarge, color = cs.onSurface)
+                        }
+                    }
+                }
             }
         }
     }
@@ -789,7 +975,7 @@ private fun ItemRow(item: Item, prefs: Prefs, set: (String, String) -> Unit, ctx
     }
 }
 
-/** Visual Material 3 accent seed swatch selector (Teal, Blue, Purple, Orange). */
+/** Visual Material 3 Expressive 3-tone accent seed swatch selector (Teal, Blue, Purple, Orange). */
 @Composable
 private fun AccentSwatchPicker(
     title: String,
@@ -810,23 +996,34 @@ private fun AccentSwatchPicker(
                     else -> if (dark) M3Schemes.TealDark else M3Schemes.TealLight
                 }
                 val isSel = id == selected
-                val borderC by animateColorAsState(if (isSel) cs.primary else cs.outlineVariant.copy(alpha = 0.6f), label = "swatchBorder")
+                val borderC by animateColorAsState(
+                    if (isSel) cs.primary else cs.outlineVariant.copy(alpha = 0.6f),
+                    animationSpec = ExpressiveMotion.effectsDefault(),
+                    label = "swatchBorder"
+                )
+                val corner by animateDpAsState(
+                    targetValue = if (isSel) 20.dp else 14.dp,
+                    animationSpec = ExpressiveMotion.spatialFast(),
+                    label = "swatchCorner"
+                )
                 Surface(
                     onClick = { onSelect(id) },
-                    shape = Dim.Field,
+                    shape = RoundedCornerShape(corner),
                     color = if (isSel) cs.primaryContainer else cs.surfaceContainerHigh,
                     border = BorderStroke(if (isSel) 2.dp else 1.dp, borderC),
-                    modifier = Modifier.weight(1f).heightIn(min = 56.dp).testTag("accent_swatch_$id")
+                    modifier = Modifier.weight(1f).heightIn(min = 60.dp).testTag("accent_swatch_$id")
                 ) {
                     Column(
                         Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Box(
-                            Modifier.size(26.dp).clip(CircleShape).background(scheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Box(Modifier.size(30.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
+                            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                                drawArc(scheme.primary, startAngle = 180f, sweepAngle = 180f, useCenter = true)
+                                drawArc(scheme.secondaryContainer, startAngle = 0f, sweepAngle = 90f, useCenter = true)
+                                drawArc(scheme.tertiaryContainer, startAngle = 90f, sweepAngle = 90f, useCenter = true)
+                            }
                             if (isSel) Ic(R.drawable.ic_check, null, scheme.onPrimary, 16.dp)
                         }
                         Text(
