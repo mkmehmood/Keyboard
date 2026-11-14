@@ -374,7 +374,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
         if (!prefs.bool("nextWord") || word.length < 2) return
         val gap = beforeWord.takeLastWhile { it == ' ' }
         if (gap.isEmpty()) return
-        val prev = beforeWord.dropLast(gap.length).takeLastWhile { it.isLetter() || it == '\'' }
+        val prev = beforeWord.dropLast(gap.length).takeLastWhile { WordContext.isWordChar(it) }
         if (prev.isEmpty()) return
         Bigrams.learn(prev, word)
         if (++learned % 25 == 0) scope.launch(Dispatchers.IO) { Bigrams.save(this@EveryDayKeysService) }
@@ -445,7 +445,7 @@ class EveryDayKeysService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun updateAutoCap() {
-        if (!prefs.bool("autoCap") || shift == Shift.LOCK || !smart) return
+        if (!prefs.bool("autoCap") || shift == Shift.LOCK || !smart || Layouts.hasShiftLayer(lang)) return
         val i = info ?: return
         val caps = currentInputConnection?.getCursorCapsMode(i.inputType) ?: 0
         if (caps != 0 && shift == Shift.OFF) shift = Shift.ONCE

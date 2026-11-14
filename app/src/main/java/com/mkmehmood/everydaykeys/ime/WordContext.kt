@@ -13,8 +13,16 @@ object WordContext {
      * ("dogs'", "don'"), and a word glued to digits or symbols ("3rd", "user@gma", "a.b", "#tag", "file_na").
      * Leading apostrophes (an opening quote) are not part of the word.
      */
+    /** Combining marks (Urdu and Arabic diacritics, Hindi vowel signs) belong to the word they follow. */
+    fun isMark(c: Char): Boolean = when (Character.getType(c)) {
+        Character.NON_SPACING_MARK.toInt(), Character.COMBINING_SPACING_MARK.toInt(), Character.ENCLOSING_MARK.toInt() -> true
+        else -> false
+    }
+
+    fun isWordChar(c: Char): Boolean = c.isLetter() || c == '\'' || isMark(c)
+
     fun currentWord(before: String): String {
-        val run = before.takeLastWhile { it.isLetter() || it == '\'' }
+        val run = before.takeLastWhile { isWordChar(it) }
         if (run.isEmpty() || run.last() == '\'') return ""
         val word = run.trimStart('\'')
         if (word.isEmpty()) return ""
@@ -27,5 +35,5 @@ object WordContext {
     }
 
     /** True when the cursor sits inside a word, so the letters after it belong to the same word. */
-    fun insideWord(after: String): Boolean = after.isNotEmpty() && (after[0].isLetterOrDigit() || after[0] == '\'')
+    fun insideWord(after: String): Boolean = after.isNotEmpty() && (after[0].isLetterOrDigit() || after[0] == '\'' || isMark(after[0]))
 }

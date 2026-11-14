@@ -461,8 +461,10 @@ private fun kbGrid(maxWidth: Dp, p: Prefs): Grid {
 
 @Composable
 private fun LettersView(svc: EveryDayKeysService, c: KbColors) {
-    val rows = Layouts.letters[svc.lang] ?: Layouts.letters.getValue("en")
     val up = svc.shift != Shift.OFF
+    val layer = Layouts.shifted[svc.lang]
+    val rows = (if (up && layer != null) layer else Layouts.letters[svc.lang]) ?: Layouts.letters.getValue("en")
+    val upper = up && layer == null   // capitals only for scripts that have them
     val hintsOn = svc.prefs.bool("keyHints") || layoutStyle(svc.prefs) == "pro"
     val gap = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -478,18 +480,21 @@ private fun LettersView(svc: EveryDayKeysService, c: KbColors) {
                 }
             }
             rows.forEachIndexed { i, row ->
+                // Rows with more keys than fit at full size (Hindi) get narrower keys instead of overflowing
+                val area = if (i == 2) w(10f) - w(1.5f) * 2 - KeyGap * 2 else w(10f)
+                val keyW = if (w(1f) * row.size + KeyGap * (row.size - 1) > area + 0.5.dp) (area - KeyGap * (row.size - 1)) / row.size else w(1f)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = gap) {
                     if (i == 1 && row.size < 10) Spacer(Modifier.size(w(0.5f), uh))
                     if (i == 2) Key(svc, c, Modifier.size(w(1.5f), uh), "Shift", icon = if (svc.shift == Shift.LOCK) R.drawable.ic_caps else R.drawable.ic_up,
                         tone = 1, active = svc.shift != Shift.OFF) { svc.onShift() }
                     row.forEach { k ->
-                        val label = if (up) k.uppercase() else k
+                        val label = Layouts.display(if (upper) k.uppercase() else k)
                         val a = Layouts.accents[k]
                         val hint = if (hintsOn && svc.lang == "en") Hints[k] else null
                         val onLong: (() -> Unit)? = if (svc.prefs.bool("accentPopup") && a != null) {
-                            { svc.alts = a.map { if (up) it.uppercase() else it } + listOfNotNull(hint) }
+                            { svc.alts = a.map { if (upper) it.uppercase() else it } + listOfNotNull(hint) }
                         } else if (hint != null) { { svc.typeSymbol(hint) } } else null
-                        Key(svc, c, Modifier.size(w(1f), uh), label, label = label, hint = hint, onLong = onLong) { svc.onChar(k) }
+                        Key(svc, c, Modifier.size(keyW, uh), label, label = label, hint = hint, onLong = onLong) { svc.onChar(k) }
                     }
                     if (i == 2) Key(svc, c, Modifier.size(w(1.5f), uh), "Backspace", icon = R.drawable.ic_backspace, tone = 1, repeat = true) { svc.onBackspace() }
                     if (i == 1 && row.size < 10) Spacer(Modifier.size(w(0.5f), uh))
