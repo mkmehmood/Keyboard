@@ -1,5 +1,6 @@
 package com.mkmehmood.everydaykeys.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -47,7 +48,12 @@ internal fun Ic(id: Int, desc: String? = null, tint: Color = LocalContentColor.c
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScaffold(
-    title: String, onBack: () -> Unit, fab: @Composable () -> Unit = {}, content: @Composable ColumnScope.() -> Unit
+    title: String,
+    onBack: () -> Unit,
+    showBack: Boolean = true,
+    showPreviewBar: Boolean = true,
+    fab: @Composable () -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     val behavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -55,8 +61,9 @@ internal fun SettingsScaffold(
     LaunchedEffect(Unit) { Snack.collect { snackbar.showSnackbar(it) } }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        modifier = Modifier.fillMaxSize().nestedScroll(behavior.nestedScrollConnection).imePadding(),
+        modifier = Modifier.fillMaxSize().nestedScroll(behavior.nestedScrollConnection).then(if (showPreviewBar) Modifier.imePadding() else Modifier),
         containerColor = cs.surface,
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -67,10 +74,12 @@ internal fun SettingsScaffold(
                     )
                 },
                 navigationIcon = {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.minimumInteractiveComponentSize().testTag("nav_back_button")
-                    ) { Ic(R.drawable.ic_back, "Back") }
+                    if (showBack) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.minimumInteractiveComponentSize().testTag("nav_back_button")
+                        ) { Ic(R.drawable.ic_back, "Back") }
+                    }
                 },
                 scrollBehavior = behavior,
                 colors = TopAppBarDefaults.largeTopAppBarColors(
@@ -81,7 +90,7 @@ internal fun SettingsScaffold(
                 )
             )
         },
-        bottomBar = { PreviewBar() },
+        bottomBar = { if (showPreviewBar) PreviewBar() },
         floatingActionButton = fab
     ) { pad ->
         Box(
@@ -89,7 +98,7 @@ internal fun SettingsScaffold(
             contentAlignment = Alignment.TopCenter
         ) {
             Column(
-                Modifier.fillMaxSize().widthIn(max = 680.dp).padding(horizontal = 16.dp),
+                Modifier.fillMaxSize().widthIn(max = 720.dp).padding(horizontal = 16.dp),
                 content = content
             )
         }
@@ -119,6 +128,35 @@ internal fun GroupCard(modifier: Modifier = Modifier, content: @Composable Colum
         content = content
     )
 }
+
+/** Android 16 Material 3 Expressive segmented item surface inside a grouped list. */
+@Composable
+internal fun SegmentedItemCard(
+    index: Int,
+    count: Int,
+    selected: Boolean = false,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    val container by animateColorAsState(
+        if (selected) cs.secondaryContainer else cs.surfaceContainerLow,
+        label = "segmentedContainer"
+    )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = Dim.segmented(index, count),
+        color = container,
+        contentColor = if (selected) cs.onSecondaryContainer else cs.onSurface,
+        border = BorderStroke(0.5.dp, if (selected) cs.primary.copy(alpha = 0.35f) else cs.outlineVariant.copy(alpha = 0.45f)),
+        content = content
+    )
+}
+
+/** Vertical container for Material 3 Expressive segmented items with 3.dp seams. */
+@Composable
+internal fun SegmentedColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) =
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp), content = content)
 
 @Composable
 internal fun RowDivider() =

@@ -32,20 +32,34 @@ import com.mkmehmood.everydaykeys.R
  * same Material 3 roles (dynamic colour or the chosen accent) in [com.mkmehmood.everydaykeys.ime.KbColors].
  */
 
-/** Material 3 state layer opacity for the pressed state (spec value). */
+/** Material 3 Expressive motion & state layer tokens. */
 object StateLayer { const val Pressed = 0.10f }
+
+object ExpressiveMotion {
+    const val EmphasizedDurationMs = 300
+    const val FastDurationMs = 150
+}
 
 /** Material 3 Expressive shape scale and sizes. */
 object Dim {
-    val Card = RoundedCornerShape(20.dp)       // shape.large
-    val Field = RoundedCornerShape(14.dp)      // shape.medium
-    val Button = CircleShape                   // M3 buttons are pill-shaped
-    val Chip = RoundedCornerShape(10.dp)       // shape.small
+    val Card = RoundedCornerShape(24.dp)       // expressive container radius
+    val InnerCard = RoundedCornerShape(8.dp)   // inner seam radius for segmented list groups
+    val Field = RoundedCornerShape(16.dp)      // medium field radius
+    val Button = CircleShape                   // M3 pill button
+    val Chip = RoundedCornerShape(12.dp)       // expressive small/chip radius
     val TileShape = CircleShape                // leading icon container
     val Badge = RoundedCornerShape(10.dp)
     val TileSize = 42.dp
-    val RowMin = 60.dp
-    val ButtonHeight = 44.dp
+    val RowMin = 62.dp
+    val ButtonHeight = 46.dp
+
+    /** Android 16 Material 3 Expressive segmented card shape: outer 22dp, inner seam 6dp. */
+    fun segmented(index: Int, count: Int): RoundedCornerShape {
+        if (count <= 1) return RoundedCornerShape(22.dp)
+        val top = if (index == 0) 22.dp else 6.dp
+        val bottom = if (index == count - 1) 22.dp else 6.dp
+        return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+    }
 }
 
 /** Material 3 colour roles the shared components need. */
@@ -90,7 +104,7 @@ fun DsTile(p: Palette, icon: Int, size: Dp = Dim.TileSize, filled: Boolean = fal
     }
 }
 
-/** Filled Material 3 card (surface container, large expressive shape, subtle tonal border). */
+/** Filled Material 3 Expressive card (surface container, 24dp expressive shape, subtle tonal border). */
 @Composable
 fun DsGroup(p: Palette, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(

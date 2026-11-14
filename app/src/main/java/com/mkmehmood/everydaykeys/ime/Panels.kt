@@ -2,6 +2,9 @@ package com.mkmehmood.everydaykeys.ime
 
 import android.view.KeyEvent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -115,10 +118,22 @@ internal fun ToolTile(icon: Int, desc: String, c: KbColors, filled: Boolean, mod
 @Composable
 internal fun PanelHeader(c: KbColors, title: String, backDesc: String, onBack: () -> Unit, trailing: @Composable RowScope.() -> Unit = {}) {
     Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconTap(R.drawable.ic_back, backDesc, c) { onBack() }
+        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            Surface(
+                onClick = onBack,
+                modifier = Modifier.size(38.dp).semantics { contentDescription = backDesc },
+                shape = CircleShape,
+                color = c.key.copy(alpha = 0.85f),
+                contentColor = c.text
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_back), null, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
         Text(
             title, color = c.text, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = 2.dp)
+            modifier = Modifier.weight(1f).padding(start = 4.dp)
         )
         trailing()
     }
@@ -383,7 +398,7 @@ private fun ClipPanelBody(svc: EveryDayKeysService, c: KbColors) {
 private fun ClipCard(c: KbColors, clip: Clip, selected: Boolean, onClick: () -> Unit, onLong: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onSelect: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val text = clip.preview.trim().ifEmpty { "(empty)" }
-    val shape = Dim.Card
+    val shape = RoundedCornerShape(20.dp)
     Box(
         Modifier.fillMaxWidth().heightIn(min = 108.dp).clip(shape)
             .background(if (selected) c.accentContainer else c.panel)
@@ -645,16 +660,18 @@ internal fun CursorPanel(svc: EveryDayKeysService, c: KbColors, h: Dp) {
 @Composable
 private fun QuickBoxContent(c: KbColors, icon: Int, title: String, sub: String, active: Boolean) {
     val p = c.palette()
+    val titleColor = if (active) p.onAccentContainer else p.text
+    val subColor = if (active) p.onAccentContainer.copy(alpha = 0.82f) else p.sub
     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(icon), null, tint = if (active) p.onAccentContainer else p.sub, modifier = Modifier.size(22.dp))
         Column(Modifier.padding(start = 10.dp)) {
-            Text(title, color = p.text, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(sub, color = p.sub, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            Text(title, color = titleColor, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(sub, color = subColor, style = MaterialTheme.typography.bodySmall, maxLines = 1)
         }
     }
 }
 
-/** A Material 3 tile: a toggleable surface when [onToggle] is given, otherwise a plain button surface that calls [onClick]. */
+/** A Material 3 Expressive shape-morphing tile: toggleable when [onToggle] is given, otherwise a button surface calling [onClick]. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun QuickBox(
@@ -663,10 +680,16 @@ private fun QuickBox(
 ) {
     val p = c.palette()
     val color by animateColorAsState(if (active) p.accentContainer else p.surface, label = "quickBoxColor")
+    val corner by animateDpAsState(
+        targetValue = if (active) 24.dp else 16.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "quickBoxCorner"
+    )
+    val shape = RoundedCornerShape(corner)
     val border = if (active) null else BorderStroke(0.5.dp, p.hairline.copy(alpha = 0.55f))
     val m = modifier.height(64.dp)
-    if (onToggle != null) Surface(checked = active, onCheckedChange = onToggle, modifier = m, shape = Dim.Card, color = color, border = border) { QuickBoxContent(c, icon, title, sub, active) }
-    else Surface(onClick = onClick, modifier = m.semantics { contentDescription = clickLabel }, shape = Dim.Card, color = color, border = border) { QuickBoxContent(c, icon, title, sub, active) }
+    if (onToggle != null) Surface(checked = active, onCheckedChange = onToggle, modifier = m, shape = shape, color = color, border = border) { QuickBoxContent(c, icon, title, sub, active) }
+    else Surface(onClick = onClick, modifier = m.semantics { contentDescription = clickLabel }, shape = shape, color = color, border = border) { QuickBoxContent(c, icon, title, sub, active) }
 }
 
 @Composable

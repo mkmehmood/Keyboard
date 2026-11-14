@@ -52,7 +52,7 @@ import kotlin.math.min
 
 /** Pick a photo, position and zoom it into the keyboard shape, then set dimming, blur and key opacity. */
 @Composable
-fun BackgroundScreen(nav: NavController) {
+fun BackgroundScreen(nav: NavController, onBack: () -> Unit = { nav.popBackStack() }, showPreviewBar: Boolean = true) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
@@ -109,17 +109,17 @@ fun BackgroundScreen(nav: NavController) {
             SettingsRepo.set(ctx, "bgKeyAlpha", keyAlpha.toInt().toString()); SettingsRepo.set(ctx, "bgOn", "true")
             SettingsRepo.set(ctx, "bgVersion", System.currentTimeMillis().toString())
             Snack.post("Background saved")
-            nav.popBackStack()
+            onBack()
         }
     }
 
     fun remove() = scope.launch {
         KbBackground.delete(ctx)
         SettingsRepo.set(ctx, "bgOn", "false"); SettingsRepo.set(ctx, "bgVersion", System.currentTimeMillis().toString())
-        nav.popBackStack()
+        onBack()
     }
 
-    SettingsScaffold("Background image", onBack = { nav.popBackStack() }) {
+    SettingsScaffold("Background image", onBack = onBack, showPreviewBar = showPreviewBar) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Box(
                 Modifier.fillMaxWidth().aspectRatio(aspect).clip(CardShape)

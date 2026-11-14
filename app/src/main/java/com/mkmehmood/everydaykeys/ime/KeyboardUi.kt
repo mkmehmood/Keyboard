@@ -1,5 +1,7 @@
 package com.mkmehmood.everydaykeys.ime
 
+import android.os.Build
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -7,6 +9,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
@@ -65,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.toArgb
 import com.mkmehmood.everydaykeys.data.Prefs
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntSize
@@ -76,6 +80,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -174,11 +179,31 @@ private fun KeyboardContent(svc: EveryDayKeysService) {
             base.tile, base.onTile, base.accentContainer, base.onAccentContainer,
             base.outline, base.outlineVariant, base.scrim, base.surfaceHighest)
     }
+    val navColor = scheme.surfaceContainer.toArgb()
+    SideEffect {
+        runCatching {
+            val w = svc.window?.window ?: return@runCatching
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT < 35) {
+                w.navigationBarColor = navColor
+            }
+            if (Build.VERSION.SDK_INT >= 29) {
+                w.isNavigationBarContrastEnforced = false
+            }
+            WindowCompat.getInsetsController(w, w.decorView).isAppearanceLightNavigationBars = !dark
+        }
+    }
     val oh = p.str("oneHanded")
     val align = when (oh) { "left" -> Alignment.BottomStart; "right" -> Alignment.BottomEnd; else -> Alignment.BottomCenter }
     val h = 52.dp
     var rootW by remember { mutableStateOf(0) }
-    Box(Modifier.fillMaxWidth().background(base.bg).onSizeChanged { rootW = it.width }, contentAlignment = align) {
+    Box(
+        Modifier.fillMaxWidth()
+            .background(base.bg)
+            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+            .onSizeChanged { rootW = it.width },
+        contentAlignment = align
+    ) {
         if (bmp != null) {
             val blurDp = p.int("bgBlur")
             Box(Modifier.matchParentSize().clipToBounds()) {
@@ -252,8 +277,8 @@ fun Key(
     }
     val shape = shapeOverride ?: keyShape(p)
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
+        targetValue = if (pressed) 0.91f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "keyPressScale"
     )
     // Material 3: outlined keys have no container; the pressed state is a 10% state layer of the content colour
@@ -312,20 +337,20 @@ fun Key(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp)
         )
         if (pressed && tone == 0 && label != null && label.length <= 2 && label.isNotBlank() && p.bool("keyPreview")) {
-            val lift = with(LocalDensity.current) { 72.dp.roundToPx() }
-            val bubble = EveryDayKeysShapes.large
+            val lift = with(LocalDensity.current) { 74.dp.roundToPx() }
+            val bubble = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 12.dp, bottomEnd = 12.dp)
             Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -lift)) {
                 Surface(
-                    Modifier.size(54.dp, 66.dp),
+                    Modifier.size(56.dp, 68.dp),
                     shape = bubble,
-                    color = c.panel,
+                    color = c.surfaceHighest,
                     contentColor = c.text,
-                    tonalElevation = 4.dp,
-                    shadowElevation = 6.dp,
-                    border = BorderStroke(1.dp, c.outlineVariant.copy(alpha = 0.5f))
+                    tonalElevation = 6.dp,
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, c.accent.copy(alpha = 0.25f))
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(label, color = c.text, style = MaterialTheme.typography.headlineMedium)
+                        Text(label, color = c.text, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -344,10 +369,11 @@ internal fun IconTap(icon: Int, desc: String, c: KbColors, tint: Color = c.text,
 private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) {
     val shape = if (layoutStyle(svc.prefs) == "flat" || layoutStyle(svc.prefs) == "pro") RoundedCornerShape(50) else keyShape(svc.prefs)
     val outline = effStyle(svc.prefs) == "outline"
+    val langLabel = Layouts.langNames[svc.lang] ?: svc.lang.uppercase()
     Box(
         modifier.clip(shape).background(if (outline) Color.Transparent else c.key)
             .then(if (outline) Modifier.border(1.5.dp, c.outline, shape) else Modifier)
-            .semantics { contentDescription = "Space. Swipe left or right to move the cursor."; role = Role.Button; onClick { svc.onChar(" "); true } }
+            .semantics { contentDescription = "Space, $langLabel. Swipe left or right to move the cursor."; role = Role.Button; onClick { svc.onChar(" "); true } }
             .pointerInput(Unit) { detectTapGestures(onPress = { svc.feedback() }, onTap = { svc.onChar(" ") }) }
             .pointerInput(Unit) {
                 var acc = 0f
@@ -359,7 +385,15 @@ private fun SpaceKey(svc: EveryDayKeysService, c: KbColors, modifier: Modifier) 
                 }
             },
         contentAlignment = Alignment.Center
-    ) { Icon(painterResource(R.drawable.ic_space), null, tint = c.text, modifier = Modifier.size(22.dp)) }
+    ) {
+        Text(
+            langLabel,
+            color = c.sub.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 // ---------------------------------------------------------------- layouts
@@ -703,27 +737,37 @@ private fun Strip(svc: EveryDayKeysService, c: KbColors) {
     val noWords = items.isEmpty() && pending == null
     val showTools = hasToolbar && alts == null && (svc.toolsOpen || noWords || svc.hasSelection)
     if (!hasToolbar && noWords) { Spacer(Modifier.fillMaxWidth().height(StripH)); return }
-    Row(Modifier.fillMaxWidth().height(StripH), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(StripH).animateContentSize(), verticalAlignment = Alignment.CenterVertically) {
         if (hasToolbar) ToolboxToggle(svc, c, open = showTools)
         if (showTools) { ToolIcons(svc, c); return@Row }
         if (pending != null) ClipChip(svc, c, pending, items.isEmpty())
-        items.forEachIndexed { i, s ->
-            if (i > 0) Box(Modifier.width(1.dp).height(18.dp).background(c.outlineVariant.copy(alpha = 0.65f)))
-            Box(
-                Modifier.weight(1f).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
-                    .clip(EveryDayKeysShapes.small)
-                    .clickable { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    s,
-                    color = c.text,
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
+        Row(
+            Modifier.weight(1f).fillMaxHeight().padding(horizontal = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEachIndexed { i, s ->
+                val isPrimary = alts == null && i == 0 && s.isNotBlank()
+                Surface(
+                    onClick = { if (alts != null) svc.onAlt(s) else svc.applySuggestion(s) },
+                    modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
+                    shape = CircleShape,
+                    color = if (isPrimary) c.accentContainer.copy(alpha = 0.72f) else c.panel.copy(alpha = 0.72f),
+                    contentColor = if (isPrimary) c.onAccentContainer else c.text
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            s,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = if (isPrimary) FontWeight.SemiBold else FontWeight.Normal
+                            ),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                }
             }
         }
         if (alts != null) IconTap(R.drawable.ic_close, "Close alternates", c) { svc.alts = null }

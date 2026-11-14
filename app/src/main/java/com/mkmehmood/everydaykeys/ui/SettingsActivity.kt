@@ -2,27 +2,41 @@ package com.mkmehmood.everydaykeys.ui
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color as AndroidColor
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.text.format.Formatter
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,11 +57,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -101,6 +118,16 @@ fun AppColors(content: @Composable () -> Unit) {
         "light" -> false
         else -> isSystemInDarkTheme()
     }
+    val act = ctx as? ComponentActivity
+    SideEffect {
+        act?.enableEdgeToEdge(
+            statusBarStyle = if (dark) SystemBarStyle.dark(AndroidColor.TRANSPARENT) else SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+            navigationBarStyle = if (dark) SystemBarStyle.dark(AndroidColor.TRANSPARENT) else SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            act?.window?.isNavigationBarContrastEnforced = false
+        }
+    }
     EveryDayKeysTheme(dark = dark, dynamic = p.bool("dynamicColor"), accent = p.str("accent"), content = content)
 }
 
@@ -112,20 +139,93 @@ fun AppTheme(content: @Composable () -> Unit) = AppColors {
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
-    // Material 3 "fade through" motion with the emphasized easing
+    // Material 3 Expressive shared-axis X + emphasized easing
     val ease = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-    NavHost(
-        nav, "home",
-        enterTransition = { fadeIn(tween(210, 90, ease)) + scaleIn(tween(300, 0, ease), initialScale = 0.92f) },
-        exitTransition = { fadeOut(tween(90, 0, ease)) },
-        popEnterTransition = { fadeIn(tween(210, 90, ease)) + scaleIn(tween(300, 0, ease), initialScale = 0.92f) },
-        popExitTransition = { fadeOut(tween(90, 0, ease)) }
-    ) {
-        composable("home") { HomeScreen(nav) }
-        composable("s/{id}") { SectionScreen(it.arguments?.getString("id") ?: "lang", nav) }
-        composable("snippets") { SnippetsScreen(nav) }
-        composable("background") { BackgroundScreen(nav) }
-        composable("dictionary") { DictScreen(nav) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= 840.dp) {
+            AdaptiveSettingsWorkspace(nav)
+        } else {
+            NavHost(
+                nav, "home",
+                enterTransition = {
+                    slideInHorizontally(tween(300, 0, ease)) { it / 12 } +
+                        fadeIn(tween(210, 90, ease)) +
+                        scaleIn(tween(300, 0, ease), initialScale = 0.96f)
+                },
+                exitTransition = {
+                    slideOutHorizontally(tween(240, 0, ease)) { -it / 18 } + fadeOut(tween(110, 0, ease))
+                },
+                popEnterTransition = {
+                    slideInHorizontally(tween(300, 0, ease)) { -it / 12 } +
+                        fadeIn(tween(210, 90, ease)) +
+                        scaleIn(tween(300, 0, ease), initialScale = 0.96f)
+                },
+                popExitTransition = {
+                    slideOutHorizontally(tween(240, 0, ease)) { it / 12 } + fadeOut(tween(110, 0, ease))
+                }
+            ) {
+                composable("home") { HomeScreen(nav) }
+                composable("s/{id}") { SectionScreen(it.arguments?.getString("id") ?: "lang", nav) }
+                composable("snippets") { SnippetsScreen(nav) }
+                composable("background") { BackgroundScreen(nav) }
+                composable("dictionary") { DictScreen(nav) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdaptiveSettingsWorkspace(nav: NavController) {
+    val cs = MaterialTheme.colorScheme
+    var selectedSectionId by remember { mutableStateOf("lang") }
+    var detailSubRoute by remember { mutableStateOf<String?>(null) }
+    BackHandler(enabled = detailSubRoute != null) { detailSubRoute = null }
+
+    Column(Modifier.fillMaxSize().imePadding()) {
+        Row(
+            Modifier.weight(1f).fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(Modifier.width(380.dp).fillMaxHeight()) {
+                HomeScreen(
+                    nav = nav,
+                    selectedSectionId = selectedSectionId,
+                    showBack = false,
+                    showPreviewBar = false,
+                    onSelectSection = { id -> selectedSectionId = id; detailSubRoute = null }
+                )
+            }
+            Surface(
+                Modifier.weight(1f).fillMaxHeight(),
+                shape = RoundedCornerShape(28.dp),
+                color = cs.surfaceContainerLowest,
+                border = BorderStroke(0.5.dp, cs.outlineVariant.copy(alpha = 0.5f))
+            ) {
+                AnimatedContent(
+                    targetState = detailSubRoute to selectedSectionId,
+                    transitionSpec = {
+                        fadeIn(tween(210, 60)) togetherWith fadeOut(tween(120))
+                    },
+                    label = "adaptiveDetailPane"
+                ) { (sub, secId) ->
+                    when (sub) {
+                        "snippets" -> SnippetsScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
+                        "background" -> BackgroundScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
+                        "dictionary" -> DictScreen(nav, onBack = { detailSubRoute = null }, showPreviewBar = false)
+                        else -> SectionScreen(
+                            id = secId,
+                            nav = nav,
+                            showBack = false,
+                            showPreviewBar = false,
+                            onNavigateSub = { detailSubRoute = it }
+                        )
+                    }
+                }
+            }
+        }
+        PreviewBar()
     }
 }
 
@@ -164,7 +264,13 @@ private val sectionGroups: List<Pair<String, List<String>>> = listOf(
 // ---------------------------------------------------------------- home
 
 @Composable
-fun HomeScreen(nav: NavController) {
+fun HomeScreen(
+    nav: NavController,
+    selectedSectionId: String? = null,
+    showBack: Boolean = true,
+    showPreviewBar: Boolean = true,
+    onSelectSection: ((String) -> Unit)? = null
+) {
     val ctx = LocalContext.current
     val owner = ctx as ComponentActivity
     val prefs = rememberPrefs()
@@ -180,7 +286,7 @@ fun HomeScreen(nav: NavController) {
     val cs = MaterialTheme.colorScheme
     val sectionsById = remember { Defs.sections.associateBy { it.id } }
 
-    SettingsScaffold("Everyday Keys", onBack = { owner.finish() }) {
+    SettingsScaffold("Everyday Keys", onBack = { owner.finish() }, showBack = showBack, showPreviewBar = showPreviewBar) {
         SearchBox(q, { q = it }, "Search settings")
         Spacer(Modifier.height(16.dp))
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -192,16 +298,24 @@ fun HomeScreen(nav: NavController) {
                         item(key = "group_$groupTitle") {
                             Column {
                                 SectionHeader(groupTitle)
-                                GroupCard {
+                                SegmentedColumn {
                                     itemsInGroup.forEachIndexed { i, s ->
-                                        if (i > 0) RowDivider()
-                                        ListRow(
-                                            s.title,
-                                            Modifier.clickable { nav.navigate("s/${s.id}") }.testTag("section_row_${s.id}"),
-                                            sub = s.desc,
-                                            leading = { Tile(s.icon) },
-                                            trailing = { Ic(R.drawable.ic_right, null, cs.onSurfaceVariant) }
-                                        )
+                                        val isSel = selectedSectionId == s.id
+                                        SegmentedItemCard(i, itemsInGroup.size, selected = isSel) {
+                                            ListRow(
+                                                s.title,
+                                                Modifier.clickable {
+                                                    if (onSelectSection != null) onSelectSection(s.id) else nav.navigate("s/${s.id}")
+                                                }.testTag("section_row_${s.id}"),
+                                                sub = s.desc,
+                                                leading = { Tile(s.icon, filled = isSel) },
+                                                trailing = {
+                                                    if (onSelectSection == null || isSel) {
+                                                        Ic(R.drawable.ic_right, null, if (isSel) cs.primary else cs.onSurfaceVariant)
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -230,22 +344,25 @@ fun HomeScreen(nav: NavController) {
                             )
                         }
                     } else {
-                        GroupCard {
+                        SegmentedColumn {
                             hits.forEachIndexed { i, (s, it) ->
-                                if (i > 0) RowDivider()
-                                Surface(
-                                    shape = CircleShape,
-                                    color = cs.primaryContainer,
-                                    contentColor = cs.onPrimaryContainer,
-                                    modifier = Modifier.padding(start = 16.dp, top = 12.dp)
-                                ) {
-                                    Text(
-                                        s.title,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
+                                SegmentedItemCard(i, hits.size) {
+                                    Column {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = cs.primaryContainer,
+                                            contentColor = cs.onPrimaryContainer,
+                                            modifier = Modifier.padding(start = 16.dp, top = 12.dp)
+                                        ) {
+                                            Text(
+                                                s.title,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                        ItemRow(it, prefs, { k, v -> commitSetting(ctx, scope, k, v) }, ctx) {}
+                                    }
                                 }
-                                ItemRow(it, prefs, { k, v -> commitSetting(ctx, scope, k, v) }, ctx) {}
                             }
                         }
                     }
@@ -256,18 +373,18 @@ fun HomeScreen(nav: NavController) {
     }
 }
 
-/** Expressive Material 3 hero setup status card with layered tonal gradient surface. */
+/** Expressive Material 3 hero setup status card with layered tonal gradient surface and progress bar. */
 @Composable
 private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
     val ok = enabled && selected
     val cs = MaterialTheme.colorScheme
     val c1 = if (ok) cs.primaryContainer else cs.secondaryContainer
-    val c2 = if (ok) cs.tertiaryContainer.copy(alpha = 0.6f) else cs.primaryContainer.copy(alpha = 0.7f)
+    val c2 = if (ok) cs.tertiaryContainer.copy(alpha = 0.65f) else cs.primaryContainer.copy(alpha = 0.72f)
     val fg = if (ok) cs.onPrimaryContainer else cs.onSecondaryContainer
 
     Surface(
         Modifier.fillMaxWidth().animateContentSize(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         color = Color.Transparent,
         border = BorderStroke(1.dp, cs.primary.copy(alpha = if (ok) 0.18f else 0.30f))
     ) {
@@ -280,51 +397,66 @@ private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
                         end = Offset(size.width, size.height)
                     )
                 )
+                drawCircle(
+                    color = cs.primary.copy(alpha = 0.08f),
+                    radius = size.minDimension * 0.75f,
+                    center = Offset(size.width * 0.92f, size.height * 0.12f)
+                )
             }
         ) {
-            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    Modifier.size(52.dp),
-                    shape = CircleShape,
-                    color = cs.primary,
-                    contentColor = cs.onPrimary,
-                    tonalElevation = 2.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Ic(if (ok) R.drawable.ic_check else R.drawable.ic_keyboard, null, cs.onPrimary, 26.dp)
-                    }
-                }
-                Column(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        shape = CircleShape,
-                        color = cs.surface.copy(alpha = 0.65f),
-                        contentColor = cs.primary
+                        Modifier.size(54.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        color = cs.primary,
+                        contentColor = cs.onPrimary,
+                        tonalElevation = 2.dp
                     ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Ic(if (ok) R.drawable.ic_check else R.drawable.ic_keyboard, null, cs.onPrimary, 26.dp)
+                        }
+                    }
+                    Column(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Surface(
+                            shape = CircleShape,
+                            color = cs.surface.copy(alpha = 0.72f),
+                            contentColor = cs.primary
+                        ) {
+                            Text(
+                                if (ok) "Active" else if (!enabled) "Step 1 of 2" else "Step 2 of 2",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                            )
+                        }
                         Text(
-                            if (ok) "Active" else if (!enabled) "Step 1 of 2" else "Step 2 of 2",
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                            if (ok) "Everyday Keys is ready" else if (!enabled) "Enable Everyday Keys" else "Switch to Everyday Keys",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = fg
+                        )
+                        Text(
+                            if (ok) "Enabled and selected as your default keyboard" else if (!enabled) "Turn it on in Android keyboard settings" else "Choose it from your input method picker",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = fg.copy(alpha = 0.85f)
                         )
                     }
-                    Text(
-                        if (ok) "Everyday Keys is ready" else if (!enabled) "Enable Everyday Keys" else "Switch to Everyday Keys",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = fg
-                    )
-                    Text(
-                        if (ok) "Enabled and selected as your default keyboard" else if (!enabled) "Turn it on in Android keyboard settings" else "Choose it from your input method picker",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = fg.copy(alpha = 0.85f)
-                    )
+                    if (!ok) {
+                        PrimaryButton(
+                            if (!enabled) "Enable" else "Switch",
+                            modifier = Modifier.testTag("setup_status_button")
+                        ) {
+                            if (!enabled) ctx.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                            else ctx.getSystemService(InputMethodManager::class.java).showInputMethodPicker()
+                        }
+                    }
                 }
                 if (!ok) {
-                    PrimaryButton(
-                        if (!enabled) "Enable" else "Switch",
-                        modifier = Modifier.testTag("setup_status_button")
-                    ) {
-                        if (!enabled) ctx.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
-                        else ctx.getSystemService(InputMethodManager::class.java).showInputMethodPicker()
-                    }
+                    LinearProgressIndicator(
+                        progress = { if (!enabled) 0.33f else 0.72f },
+                        color = cs.primary,
+                        trackColor = cs.surface.copy(alpha = 0.55f),
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+                    )
                 }
             }
         }
@@ -333,7 +465,7 @@ private fun StatusCard(ctx: Context, enabled: Boolean, selected: Boolean) {
 
 // ---------------------------------------------------------------- live preview
 
-/** Live miniature Material 3 keyboard preview shown on Appearance and Key Style screens. */
+/** Interactive Material 3 Expressive miniature keyboard preview shown on Appearance and Key Style screens. */
 @Composable
 private fun LiveKeyboardPreview(prefs: Prefs) {
     val ctx = LocalContext.current
@@ -352,15 +484,23 @@ private fun LiveKeyboardPreview(prefs: Prefs) {
     val keyBg = if (dark) cs.surfaceContainerHighest else cs.surfaceContainerLowest
     val keyAltBg = cs.secondaryContainer
     val showHints = prefs.bool("keyHints") || prefs.str("layoutStyle") == "pro"
+    var lastPressed by remember { mutableStateOf<String?>(null) }
 
     @Composable
     fun MiniKey(
+        id: String,
         label: String? = null,
         icon: Int? = null,
         hint: String? = null,
         tone: Int = 0,
         modifier: Modifier
     ) {
+        var held by remember { mutableStateOf(false) }
+        val scale by animateFloatAsState(
+            targetValue = if (held) 0.90f else 1f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+            label = "miniKeyBounce"
+        )
         val container = when {
             outline -> Color.Transparent
             tone == 2 -> cs.primary
@@ -375,10 +515,20 @@ private fun LiveKeyboardPreview(prefs: Prefs) {
             else -> cs.onSurface
         }
         val m = modifier.height(42.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(if (style == "raised") Modifier.shadow(2.dp, shape) else Modifier)
             .clip(shape)
             .background(container)
             .then(if (outline) Modifier.border(1.5.dp, if (tone == 2) cs.primary else cs.outline, shape) else Modifier)
+            .pointerInput(id) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    held = true
+                    lastPressed = id
+                    waitForUpOrCancellation()
+                    held = false
+                }
+            }
         Box(m, contentAlignment = Alignment.Center) {
             if (icon != null) Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(18.dp))
             else if (label != null) Text(label, color = fg, style = MaterialTheme.typography.titleMedium)
@@ -395,31 +545,53 @@ private fun LiveKeyboardPreview(prefs: Prefs) {
 
     Card(
         Modifier.fillMaxWidth().padding(bottom = 16.dp),
-        shape = CardShape,
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = bg),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Live preview", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text(
+                    if (lastPressed == null) "Interactive preview" else "Interactive preview · $lastPressed",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = cs.onSurfaceVariant
+                )
                 Surface(shape = CircleShape, color = cs.primaryContainer, contentColor = cs.onPrimaryContainer) {
                     Text(
                         if (prefs.bool("dynamicColor")) "Material You" else prefs.str("accent").replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
+                }
+            }
+            // Mini suggestion strip reflecting modern Android Expressive pill highlight
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(Modifier.weight(1f).height(28.dp), shape = CircleShape, color = cs.primaryContainer.copy(alpha = 0.72f)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("Everyday", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = cs.onPrimaryContainer)
+                    }
+                }
+                Surface(Modifier.weight(1f).height(28.dp), shape = CircleShape, color = cs.surfaceContainerHigh) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("Keys", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    }
+                }
+                Surface(Modifier.weight(1f).height(28.dp), shape = CircleShape, color = cs.surfaceContainerHigh) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("Ready", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    }
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 listOf("Q" to "1", "W" to "2", "E" to "3", "R" to "4", "T" to "5", "Y" to "6").forEach { (k, h) ->
-                    MiniKey(label = k, hint = h, modifier = Modifier.weight(1f))
+                    MiniKey(id = k, label = k, hint = h, modifier = Modifier.weight(1f))
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                MiniKey(icon = R.drawable.ic_up, tone = 1, modifier = Modifier.weight(1.3f))
-                MiniKey(icon = R.drawable.ic_emoji, tone = 1, modifier = Modifier.weight(1f))
-                MiniKey(icon = R.drawable.ic_space, modifier = Modifier.weight(3.2f))
-                MiniKey(icon = R.drawable.ic_enter, tone = 2, modifier = Modifier.weight(1.5f))
+                MiniKey(id = "Shift", icon = R.drawable.ic_up, tone = 1, modifier = Modifier.weight(1.3f))
+                MiniKey(id = "Emoji", icon = R.drawable.ic_emoji, tone = 1, modifier = Modifier.weight(1f))
+                MiniKey(id = "Space", label = "English", modifier = Modifier.weight(3.2f))
+                MiniKey(id = "Enter", icon = R.drawable.ic_enter, tone = 2, modifier = Modifier.weight(1.5f))
             }
         }
     }
@@ -727,7 +899,13 @@ private fun OrderedMulti(item: Multi, prefs: Prefs, set: (String, String) -> Uni
 private class Confirm(val text: String, val run: () -> Unit)
 
 @Composable
-fun SectionScreen(id: String, nav: NavController) {
+fun SectionScreen(
+    id: String,
+    nav: NavController,
+    showBack: Boolean = true,
+    showPreviewBar: Boolean = true,
+    onNavigateSub: ((String) -> Unit)? = null
+) {
     val s = Defs.sections.first { it.id == id }
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -744,12 +922,16 @@ fun SectionScreen(id: String, nav: NavController) {
         if (uri != null) scope.launch { runCatching { Backup.import(ctx, uri) }.onSuccess { toast("Restored") }.onFailure { toast("Restore failed") } }
     }
 
+    fun openRoute(route: String) {
+        if (onNavigateSub != null) onNavigateSub(route) else nav.navigate(route)
+    }
+
     fun onAction(a: Action) {
         when (a.id) {
-            "bgEdit" -> nav.navigate("background")
+            "bgEdit" -> openRoute("background")
             "resizeKb" -> { commitSetting(ctx, scope, "resizeMode", "true"); toast("Tap the box at the bottom to open the keyboard, then drag its edges") }
-            "snippets" -> nav.navigate("snippets")
-            "dictionary" -> nav.navigate("dictionary")
+            "snippets" -> openRoute("snippets")
+            "dictionary" -> openRoute("dictionary")
             "clearClips" -> confirm = Confirm("Clear all unpinned clipboard history?") {
                 scope.launch { ClipRepo(ctx).clearUnpinned(); usage = ClipRepo(ctx).usageBytes() }
             }
@@ -768,18 +950,19 @@ fun SectionScreen(id: String, nav: NavController) {
         }
     }
 
-    SettingsScaffold(s.title, onBack = { nav.popBackStack() }) {
+    SettingsScaffold(s.title, onBack = { nav.popBackStack() }, showBack = showBack, showPreviewBar = showPreviewBar) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Text(s.desc, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 14.dp))
             AnimatedVisibility(visible = id == "appearance" || id == "keystyle") {
                 LiveKeyboardPreview(prefs)
             }
-            GroupCard {
+            SegmentedColumn {
                 s.items.forEachIndexed { i, item ->
-                    if (i > 0) RowDivider()
                     val shown = if (item is Action && item.id == "clearClips")
                         Action(item.id, item.title, "Large items use ${Formatter.formatFileSize(ctx, usage)}. Pinned items are kept.") else item
-                    ItemRow(shown, prefs, { k, v -> commitSetting(ctx, scope, k, v) }, ctx, ::onAction)
+                    SegmentedItemCard(i, s.items.size) {
+                        ItemRow(shown, prefs, { k, v -> commitSetting(ctx, scope, k, v) }, ctx, ::onAction)
+                    }
                 }
             }
             val keys = s.items.filter { it !is Action && it !is Input }.map { it.key }
@@ -805,7 +988,11 @@ fun SectionScreen(id: String, nav: NavController) {
 // ---------------------------------------------------------------- snippets and dictionary
 
 @Composable
-fun SnippetsScreen(nav: NavController) {
+fun SnippetsScreen(
+    nav: NavController,
+    onBack: () -> Unit = { nav.popBackStack() },
+    showPreviewBar: Boolean = true
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val dao = remember { AppDb.get(ctx).snippets() }
@@ -813,7 +1000,7 @@ fun SnippetsScreen(nav: NavController) {
     var editing by remember { mutableStateOf<Snippet?>(null) }
     val cs = MaterialTheme.colorScheme
     SettingsScaffold(
-        "Text snippets", onBack = { nav.popBackStack() },
+        "Text snippets", onBack = onBack, showPreviewBar = showPreviewBar,
         fab = {
             ExtendedFloatingActionButton(
                 onClick = { editing = Snippet(title = "", body = "", shortcut = ";") },
@@ -827,7 +1014,7 @@ fun SnippetsScreen(nav: NavController) {
     ) {
         if (list.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Surface(Modifier.size(72.dp), shape = CircleShape, color = cs.primaryContainer, contentColor = cs.onPrimaryContainer) {
+                Surface(Modifier.size(72.dp), shape = RoundedCornerShape(22.dp), color = cs.primaryContainer, contentColor = cs.onPrimaryContainer) {
                     Box(contentAlignment = Alignment.Center) { Ic(R.drawable.ic_snippet, null, cs.onPrimaryContainer, 34.dp) }
                 }
                 Text("No snippets yet", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp))
@@ -837,31 +1024,28 @@ fun SnippetsScreen(nav: NavController) {
                     modifier = Modifier.padding(top = 6.dp)
                 )
             }
-        } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 88.dp)) {
-            item {
-                GroupCard {
-                    list.forEachIndexed { i, sn ->
-                        if (i > 0) RowDivider()
-                        ListRow(
-                            sn.title, Modifier.clickable { editing = sn },
-                            sub = sn.body.take(48).replace('\n', ' '),
-                            leading = if (sn.shortcut.isNotBlank()) ({
-                                Surface(shape = Dim.Chip, color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer) {
-                                    Text(
-                                        sn.shortcut,
-                                        style = MaterialTheme.typography.labelMedium.copy(fontFamily = MonoFontFamily),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }) else ({ Tile(R.drawable.ic_snippet) }),
-                            trailing = {
-                                IconButton(
-                                    onClick = { scope.launch { dao.delete(sn) } },
-                                    modifier = Modifier.minimumInteractiveComponentSize()
-                                ) { Ic(R.drawable.ic_trash, "Delete snippet", cs.onSurfaceVariant) }
+        } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+            itemsIndexed(list, key = { _, sn -> sn.id }) { i, sn ->
+                SegmentedItemCard(i, list.size) {
+                    ListRow(
+                        sn.title, Modifier.clickable { editing = sn },
+                        sub = sn.body.take(48).replace('\n', ' '),
+                        leading = if (sn.shortcut.isNotBlank()) ({
+                            Surface(shape = Dim.Chip, color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer) {
+                                Text(
+                                    sn.shortcut,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = MonoFontFamily),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                )
                             }
-                        )
-                    }
+                        }) else ({ Tile(R.drawable.ic_snippet) }),
+                        trailing = {
+                            IconButton(
+                                onClick = { scope.launch { dao.delete(sn) } },
+                                modifier = Modifier.minimumInteractiveComponentSize()
+                            ) { Ic(R.drawable.ic_trash, "Delete snippet", cs.onSurfaceVariant) }
+                        }
+                    )
                 }
             }
         }
@@ -894,14 +1078,18 @@ fun SnippetsScreen(nav: NavController) {
 }
 
 @Composable
-fun DictScreen(nav: NavController) {
+fun DictScreen(
+    nav: NavController,
+    onBack: () -> Unit = { nav.popBackStack() },
+    showPreviewBar: Boolean = true
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val dao = remember { AppDb.get(ctx).words() }
     val list by remember { dao.observePersonal() }.collectAsState(initial = emptyList())
     var word by remember { mutableStateOf("") }
     val cs = MaterialTheme.colorScheme
-    SettingsScaffold("Personal dictionary", onBack = { nav.popBackStack() }) {
+    SettingsScaffold("Personal dictionary", onBack = onBack, showPreviewBar = showPreviewBar) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 word, { word = it.trim() },
@@ -925,7 +1113,7 @@ fun DictScreen(nav: NavController) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Surface(Modifier.size(72.dp), shape = CircleShape, color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer) {
+                Surface(Modifier.size(72.dp), shape = RoundedCornerShape(22.dp), color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer) {
                     Box(contentAlignment = Alignment.Center) { Ic(R.drawable.ic_text, null, cs.onSecondaryContainer, 34.dp) }
                 }
                 Text("No personal words yet", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp))
@@ -936,21 +1124,19 @@ fun DictScreen(nav: NavController) {
                 )
             }
         } else {
-            LazyColumn(
-                Modifier.weight(1f).clip(CardShape).background(cs.surfaceContainerLow)
-                    .border(0.5.dp, cs.outlineVariant.copy(alpha = 0.55f), CardShape)
-            ) {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                 itemsIndexed(list, key = { _, w -> w.word }) { i, w ->
-                    if (i > 0) RowDivider()
-                    ListRow(
-                        w.word,
-                        trailing = {
-                            IconButton(
-                                onClick = { scope.launch { dao.delete(w) }; Suggest.forget(w.word) },
-                                modifier = Modifier.minimumInteractiveComponentSize()
-                            ) { Ic(R.drawable.ic_trash, "Delete word", cs.onSurfaceVariant) }
-                        }
-                    )
+                    SegmentedItemCard(i, list.size) {
+                        ListRow(
+                            w.word,
+                            trailing = {
+                                IconButton(
+                                    onClick = { scope.launch { dao.delete(w) }; Suggest.forget(w.word) },
+                                    modifier = Modifier.minimumInteractiveComponentSize()
+                                ) { Ic(R.drawable.ic_trash, "Delete word", cs.onSurfaceVariant) }
+                            }
+                        )
+                    }
                 }
             }
         }
