@@ -18,6 +18,20 @@ class AlphabetsTest {
 
     @Test fun arabicIsComplete() = assertEquals(emptyList<String>(), missing("ar", "ابتثجحخدذرزسشصضطظعغفقكلمنهويةىءئؤأإآ"))
 
+    @Test fun pashtoIsComplete() {
+        assertEquals(emptyList<String>(), missing("ps", "ابپتټثجچځڅحخدډذرړزږژسښشصضطظعغفقکګلمنڼوهیيېۍئ"))
+        assertEquals(emptyList<String>(), missing("ps", "ءؤةۀآأ"))
+        assertEquals("Pashto", Layouts.langNames["ps"])
+    }
+
+    @Test fun arabicScriptLanguagesHaveTheirOwnPunctuation() {
+        for (lang in listOf("ur", "ar", "ps")) {
+            val alts = Layouts.periodAlts(lang)
+            assertTrue(lang, "۔" in alts && "،" in alts && "؟" in alts && "؛" in alts && "!" in alts)
+        }
+        assertEquals(Layouts.periodAlts, Layouts.periodAlts("en"))
+    }
+
     @Test fun hindiVowelsAndConsonantsAreComplete() {
         assertEquals(emptyList<String>(), missing("hi", "अआइईउऊऋएऐओऔ"))
         assertEquals(emptyList<String>(), missing("hi", "कखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसहळ"))

@@ -17,7 +17,7 @@ object Translator {
     class Failure(message: String) : Exception(message)
 
     val languages = listOf(
-        "en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi", "es" to "Spanish", "fr" to "French",
+        "en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi", "ps" to "Pashto", "es" to "Spanish", "fr" to "French",
         "de" to "German", "pt" to "Portuguese", "ru" to "Russian", "tr" to "Turkish", "it" to "Italian",
         "zh" to "Chinese", "ja" to "Japanese", "ko" to "Korean", "id" to "Indonesian", "fa" to "Persian", "bn" to "Bengali"
     )
@@ -27,14 +27,16 @@ object Translator {
     fun nameOf(code: String) = languages.firstOrNull { it.first == code }?.second ?: code
 
     private val urduOnly = "ٹڈڑںےھہۂۃ"
+    // letters Pashto adds that Urdu does not use (ٹ ڈ ڑ ں are shared with Urdu, so they are not listed)
+    private val pashtoOnly = "ډړږښڼڅځګۍېۀ"
     private val englishWords = setOf("the", "and", "is", "to", "of", "a", "in", "that", "it", "for", "you", "i", "are", "this", "with",
         "what", "how", "my", "me", "we", "be", "on", "have", "not", "your", "can", "do", "was", "but", "hello", "hi", "thanks", "please")
 
     /** Best-effort source language from the writing system; null when it cannot be told (e.g. Latin text that is not English). */
     fun detectSource(text: String): String? {
-        var arabic = 0; var deva = 0; var beng = 0; var cjk = 0; var kana = 0; var hangul = 0; var cyr = 0; var latin = 0; var urdu = 0
+        var arabic = 0; var deva = 0; var beng = 0; var cjk = 0; var kana = 0; var hangul = 0; var cyr = 0; var latin = 0; var urdu = 0; var pashto = 0
         for (ch in text) when {
-            ch in '\u0600'..'\u06FF' || ch in '\u0750'..'\u077F' -> { arabic++; if (ch in urduOnly) urdu++ }
+            ch in '\u0600'..'\u06FF' || ch in '\u0750'..'\u077F' -> { arabic++; if (ch in urduOnly) urdu++; if (ch in pashtoOnly) pashto++ }
             ch in '\u0900'..'\u097F' -> deva++
             ch in '\u0980'..'\u09FF' -> beng++
             ch in '\u4E00'..'\u9FFF' -> cjk++
@@ -46,7 +48,7 @@ object Translator {
         val top = maxOf(arabic, deva, beng, cjk, kana, hangul, cyr, latin)
         if (top == 0) return null
         return when (top) {
-            arabic -> if (urdu > 0) "ur" else "ar"
+            arabic -> if (pashto > 0) "ps" else if (urdu > 0) "ur" else "ar"
             deva -> "hi"
             beng -> "bn"
             kana -> "ja"

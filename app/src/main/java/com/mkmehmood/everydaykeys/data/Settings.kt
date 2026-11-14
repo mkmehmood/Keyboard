@@ -52,7 +52,7 @@ object Defs {
 
     val sections: List<Section> = listOf(
         Section("lang", "Languages and layouts", "English, Urdu, QWERTY", R.drawable.ic_globe, listOf(
-            Multi("languages", "Languages (arrows reorder; globe key cycles)", listOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi"), "en"),
+            Multi("languages", "Languages (arrows reorder; globe key cycles)", listOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi", "ps" to "Pashto"), "en"),
             Toggle("numberRow", "Number row on letters", true),
             Toggle("accentPopup", "Long-press accents and alternates", true),
             Toggle("langKey", "Language switch key", true)
@@ -89,7 +89,7 @@ object Defs {
         )),
         Section("translate", "Translation", "Translate selected or typed text", R.drawable.ic_translate, listOf(
             Choice("translateProvider", "Provider", listOf("mymemory" to "MyMemory (free, no key)", "google" to "Google Cloud (your key)", "deepl" to "DeepL Free (your key)"), "mymemory"),
-            Choice("translateTarget", "Translate into", listOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi", "es" to "Spanish", "fr" to "French", "de" to "German", "pt" to "Portuguese", "ru" to "Russian", "tr" to "Turkish", "it" to "Italian", "zh" to "Chinese", "ja" to "Japanese", "ko" to "Korean", "id" to "Indonesian", "fa" to "Persian", "bn" to "Bengali"), "en"),
+            Choice("translateTarget", "Translate into", listOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi", "ps" to "Pashto", "es" to "Spanish", "fr" to "French", "de" to "German", "pt" to "Portuguese", "ru" to "Russian", "tr" to "Turkish", "it" to "Italian", "zh" to "Chinese", "ja" to "Japanese", "ko" to "Korean", "id" to "Indonesian", "fa" to "Persian", "bn" to "Bengali"), "en"),
             Input("googleApiKey", "Google Cloud Translation API key", secret = true),
             Input("deeplApiKey", "DeepL API Free key", secret = true),
             Input("translateEmail", "Email for a higher free MyMemory limit (optional)"),

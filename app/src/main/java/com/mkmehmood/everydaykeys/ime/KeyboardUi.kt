@@ -510,7 +510,7 @@ private fun LettersView(svc: EveryDayKeysService, c: KbColors) {
                 SpaceKey(svc, c, Modifier.size(w(space), uh))
                 Key(svc, c, Modifier.size(w(0.8f), uh), "Emoji", icon = R.drawable.ic_emoji, tone = 1) { svc.openPanel(Panel.EMOJI) }
                 Key(svc, c, Modifier.size(w(0.8f), uh), "Period. Long press for punctuation.", label = ".", tone = 1,
-                    onLong = { svc.alts = Layouts.periodAlts }) { svc.onChar(".") }
+                    onLong = { svc.alts = Layouts.periodAlts(svc.lang) }) { svc.onChar(".") }
                 Key(svc, c, Modifier.size(w(1.3f), uh), "Enter", icon = R.drawable.ic_enter, tone = 2,
                     shapeOverride = if (layoutStyle(svc.prefs) == "flat" || layoutStyle(svc.prefs) == "pro") RoundedCornerShape(50) else null) { svc.onEnter() }
             }

@@ -9,7 +9,8 @@ object Layouts {
         "ur" to listOf(r("ق و ع ر ت ے ء ی ہ پ"), r("ا س د ف گ ھ ج ک ل"), r("ز ش چ ط ب ن م")),
         "ar" to listOf(r("ض ص ث ق ف غ ع ه خ ح"), r("ش س ي ب ل ا ت ن م ك"), r("ج د ذ ر ز و ط")),
         // Hindi follows the standard InScript layout
-        "hi" to listOf(r("ौ ै ा ी ू ब ह ग द ज ड ़"), r("ो े ् ि ु प र क त च ट"), r("ं म न व ल स य"))
+        "hi" to listOf(r("ौ ै ा ी ू ब ह ग द ज ड ़"), r("ो े ् ि ु प र क त च ट"), r("ं म न व ल स य")),
+        "ps" to listOf(r("ض ص ث ق ف غ ع ه خ ح"), r("ش س ي ب ل ا ت ن م ک"), r("ج د ذ ر ز و ط"))
     )
 
     /**
@@ -19,7 +20,9 @@ object Layouts {
     val shifted: Map<String, List<List<String>>> = mapOf(
         "ur" to listOf(r("ث ؤ غ ڑ ٹ ۓ ً ئ ۃ ّ"), r("آ ص ڈ َ ِ ُ ح خ ں"), r("ژ ض ذ ظ ْ ٰ ٍ")),
         "ar" to listOf(r("ً ٌ ٍ َ ُ ِ ّ ْ ٰ ـ"), r("ئ ء ؤ ة ى آ أ إ لا ،"), r("ظ ؟ ؛ ٪ ٫ ٬ ﷼")),
-        "hi" to listOf(r("औ ऐ आ ई ऊ भ ङ घ ध झ ढ ञ"), r("ओ ए अ इ उ फ ऱ ख थ छ ठ"), r("ँ ण ऩ ऴ ळ श ष"))
+        "hi" to listOf(r("औ ऐ आ ई ऊ भ ङ घ ध झ ढ ञ"), r("ओ ए अ इ उ फ ऱ ख थ छ ठ"), r("ँ ण ऩ ऴ ळ श ष")),
+        // Pashto: the letters it adds to Arabic (ټ ډ ړ ږ ښ ڼ څ ځ چ پ ژ ګ ې ۍ ۀ), the hamza forms and the vowel marks
+        "ps" to listOf(r("چ ء ئ ة أ ۀ َ ِ ُ ّ"), r("ښ ژ ۍ پ ً آ ټ ڼ ې ګ"), r("څ ډ ځ ړ ږ ؤ ظ"))
     )
 
     /** Languages whose Shift key switches to [shifted] instead of making capitals. */
@@ -34,14 +37,14 @@ object Layouts {
         }
     }
 
-    val langNames = mapOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi")
+    val langNames = mapOf("en" to "English", "ur" to "Urdu", "ar" to "Arabic", "hi" to "Hindi", "ps" to "Pashto")
 
     val accents: Map<String, List<String>> = mapOf(
         "a" to r("à á â ä æ ã å ā"), "e" to r("è é ê ë ē ė ę"), "i" to r("î ï í ī į ì"),
         "o" to r("ô ö ò ó œ ø ō õ"), "u" to r("û ü ù ú ū"), "c" to r("ç ć č"), "n" to r("ñ ń"),
         "s" to r("ß ś š"), "y" to r("ÿ ý"), "z" to r("ž ź ż"), "l" to r("ł"), "d" to r("ð"),
-        "ا" to r("آ أ إ"), "ي" to r("ئ ى"), "ه" to r("ة"), "و" to r("ؤ"), "ی" to r("ئ ے"),
-        "ل" to r("لا"), "ہ" to r("ۃ ھ"), "ن" to r("ں"), "ے" to r("ۓ"),
+        "ا" to r("آ أ إ ٰ"), "ي" to r("ئ ى ی ې"), "ه" to r("ة ۀ ہ"), "و" to r("ؤ"), "ی" to r("ئ ے"),
+        "ل" to r("لا"), "ک" to r("گ ك"), "َ" to r("ً ٰ"), "ُ" to r("ٌ"), "ِ" to r("ٍ"), "ّ" to r("ْ"), "ہ" to r("ۃ ھ"), "ن" to r("ں"), "ے" to r("ۓ"),
         // Hindi: conjuncts, nukta forms and the signs that have no key of their own
         "क" to r("क्ष क़"), "ज" to r("ज्ञ ज़"), "त" to r("त्र"), "र" to r("ऋ ृ"), "ं" to r("ः ँ"),
         "ह" to r("ॐ ः ।"), "अ" to r("ऑ ऍ"), "ा" to r("ॉ"), "े" to r("ॅ"), "्" to r("। ॥"),
@@ -49,6 +52,10 @@ object Layouts {
     )
 
     val periodAlts = r("! ? ; : ' \" - …")
+
+    /** Long-press choices on the period key. Arabic script languages add their own full stop, comma, question mark and semicolon. */
+    fun periodAlts(lang: String): List<String> =
+        if (lang in setOf("ur", "ar", "ps")) r("۔ ، ؟ ؛") + periodAlts else periodAlts
 
     val sym1 = listOf(r("1 2 3 4 5 6 7 8 9 0"), r("@ # $ _ & - + ( ) /"), r("* \" ' : ; ! ? ,"))
     val sym2 = listOf(r("~ ` | ^ { } [ ] < >"), r("€ £ ¥ ₹ ¢ ° = % \\ •"), r("© ® ™ § … ¿ ¡ ."))
